@@ -30,6 +30,8 @@ non true false backwardmode stringescapes stringdef hex decimal""".split())
 
 keyword = MatchFirst(keywords)
 
+TRUE.setParseAction(replaceWith('True'))
+FALSE.setParseAction(replaceWith('False'))
 
 # String escapes
 str_escape_chars = []
@@ -44,6 +46,7 @@ def str_escapes_action(tokens):
 
 str_escapes = Suppress(STRINGESCAPES) + Word(printables, exact=2)
 str_escapes.setParseAction(str_escapes_action)
+
 
 class SnowballStringLiteral(Token):
 	"""
@@ -95,7 +98,7 @@ class SnowballStringLiteral(Token):
 			right = re.escape(self.escape_chars[1])
 			for k, v in self.replacements.iteritems():
 				s = re.sub(left + re.escape(k) + right, v, s)
-		return candidate + 1, s
+		return candidate + 1, repr(s)
 
 
 # Variables and literals
@@ -105,11 +108,13 @@ def make_name(title):
 def ref_action(var):
 	return lambda t: "self.%s['%s']" % (var, t[0])
 
-str_name = make_name('string')
-grouping_name = make_name('grouping')
-int_name = make_name('integer')
-boolean_name = make_name('boolean')
-routine_name = make_name('routine')
+name_action = lambda t: repr(t[0])
+
+str_name = make_name('string').setParseAction(name_action)
+grouping_name = make_name('grouping').setParseAction(name_action)
+int_name = make_name('integer').setParseAction(name_action)
+boolean_name = make_name('boolean').setParseAction(name_action)
+routine_name = make_name('routine').setParseAction(name_action)
 
 str_ref = make_name('string').setParseAction(ref_action('strings'))
 grouping_ref = make_name('grouping').setParseAction(ref_action('groupings'))
@@ -119,7 +124,6 @@ routine_ref = make_name('routine').setParseAction(lambda t: "self.%s" % t[0])
 
 str_literal = SnowballStringLiteral(str_escape_chars, str_defs)
 int_literal = Word(nums).setName('integer literal')
-int_literal.setParseAction(lambda tokens: int(tokens[0]))
 string = str_name | str_literal
 grouping = grouping_name | str_literal
 
@@ -168,8 +172,8 @@ declaration = MatchFirst([make_declaration(kw, name, target) for kw, name,
 ]])
 
 # Expressions
-MAXINT.setParseAction(replaceWith(sys.maxint))
-MININT.setParseAction(replaceWith(-sys.maxint - 1))
+MAXINT.setParseAction(replaceWith(str(sys.maxint)))
+MININT.setParseAction(replaceWith(str(-sys.maxint - 1)))
 CURSOR.setParseAction(replaceWith('self.cursor'))
 LIMIT.setParseAction(replaceWith('self.limit'))
 SIZE.setParseAction(replaceWith('len(self.string)'))
@@ -177,21 +181,33 @@ sizeof_call = Suppress(SIZEOF) + str_ref
 sizeof_call.setParseAction(lambda t: "len(%s)" % t[0])
 expr_operand = (MAXINT | MININT | CURSOR | LIMIT | SIZE | sizeof_call | int_ref |
 		int_literal).setName('operand')
+mult_action = lambda t: ' '.join(t[0])
+add_action = lambda t: '(' + ' '.join(t[0]) + ')'
 expr = Forward()
 expr << operatorPrecedence(
 	expr_operand,
 	[
 		('-', 1, opAssoc.RIGHT),
-		(oneOf('* /'), 2, opAssoc.LEFT),
-		(oneOf('+ -'), 2, opAssoc.LEFT)
+		(oneOf('* /'), 2, opAssoc.LEFT, mult_action),
+		(oneOf('+ -'), 2, opAssoc.LEFT, add_action)
 	]
-) | para_group(expr)
+)
 expr.setName('expression')
 
 # Integer commands
-ic = lambda op: Group(Suppress('$') + int_ref + op + expr)
-int_cmd = (ic('=') | ic('+=') | ic('*=') | ic('==') | ic('>') | ic('<') |
-		ic('-=') | ic('/=') | ic('!=') | ic('>=') | ic('<='))
+def make_int_assign_cmd(op, name):
+	cmd = (Suppress('$') + int_name + Suppress(op) + expr)
+	cmd.setParseAction(lambda t: 'self._int_%s(%s, %s)' % (name, t[0], t[1]))
+	return cmd
+
+int_assign_cmd = MatchFirst(make_int_assign_cmd(op, name) for op, name in [
+	('=', 'assign'), ('+=', 'add_assign'), ('*=', 'mult_assign'),
+	('-=', 'sub_assign'), ('/=', 'div_assign')
+])
+int_rel_cmd = Suppress('$') + int_ref + oneOf('== > < != >= <=') + expr
+int_rel_cmd.setParseAction(lambda t: '(' + ' '.join(t) + ')')
+int_cmd = int_assign_cmd | int_rel_cmd
+
 
 # String commands
 c = Forward()
