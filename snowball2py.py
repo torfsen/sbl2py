@@ -5,6 +5,7 @@ A Snowball to Python compiler.
 """
 
 import re
+import sys
 
 from pyparsing import *
 
@@ -28,6 +29,7 @@ atmark tolimit atlimit setlimit for backwards reverse substring among set unset
 non true false backwardmode stringescapes stringdef hex decimal""".split())
 
 keyword = MatchFirst(keywords)
+
 
 # String escapes
 str_escape_chars = []
@@ -97,11 +99,29 @@ class SnowballStringLiteral(Token):
 
 
 # Variables and literals
-name = ~keyword + Word(alphas, alphanums + '_').setName('name')
+def make_name(title):
+	return ~keyword + Word(alphas, alphanums + '_').setName(title + ' name')
+
+def ref_action(var):
+	return lambda t: "self.%s['%s']" % (var, t[0])
+
+str_name = make_name('string')
+grouping_name = make_name('grouping')
+int_name = make_name('integer')
+boolean_name = make_name('boolean')
+routine_name = make_name('routine')
+
+str_ref = make_name('string').setParseAction(ref_action('strings'))
+grouping_ref = make_name('grouping').setParseAction(ref_action('groupings'))
+int_ref = make_name('integer').setParseAction(ref_action('integers'))
+boolean_ref = make_name('boolean').setParseAction(ref_action('booleans'))
+routine_ref = make_name('routine').setParseAction(lambda t: "self.%s" % t[0])
+
 str_literal = SnowballStringLiteral(str_escape_chars, str_defs)
 int_literal = Word(nums).setName('integer literal')
-string = (name | str_literal).setName('string')
-grouping = (name | str_literal).setName('grouping')
+int_literal.setParseAction(lambda tokens: int(tokens[0]))
+string = str_name | str_literal
+grouping = grouping_name | str_literal
 
 
 # String definitions
@@ -130,7 +150,7 @@ booleans = []
 routines = []
 groupings = []
 
-def make_declaration(kw, target):
+def make_declaration(kw, name, target):
 	decl = (Suppress(kw) + Suppress('(') + ZeroOrMore(name) + Suppress(')'))
 
 	def action(tokens):
@@ -140,14 +160,23 @@ def make_declaration(kw, target):
 	decl.setParseAction(action)
 	return decl
 		
-declaration = MatchFirst([make_declaration(kw, target) for kw, target in [
-	(STRINGS, strings), (INTEGERS, integers), (BOOLEANS, booleans),
-	(ROUTINES, routines), (EXTERNALS, externals), (GROUPINGS, groupings)
+declaration = MatchFirst([make_declaration(kw, name, target) for kw, name,
+		target in [
+	(STRINGS, str_name, strings), (INTEGERS, int_name, integers),
+	(BOOLEANS, boolean_name, booleans), (ROUTINES, routine_name, routines),
+	(EXTERNALS, routine_name, externals), (GROUPINGS, grouping_name, groupings)
 ]])
 
 # Expressions
-expr_operand = (MAXINT | MININT | CURSOR | LIMIT | SIZE | Group(SIZEOF + name) |
-		name | int_literal).setName('operand')
+MAXINT.setParseAction(replaceWith(sys.maxint))
+MININT.setParseAction(replaceWith(-sys.maxint - 1))
+CURSOR.setParseAction(replaceWith('self.cursor'))
+LIMIT.setParseAction(replaceWith('self.limit'))
+SIZE.setParseAction(replaceWith('len(self.string)'))
+sizeof_call = Suppress(SIZEOF) + str_ref
+sizeof_call.setParseAction(lambda t: "len(%s)" % t[0])
+expr_operand = (MAXINT | MININT | CURSOR | LIMIT | SIZE | sizeof_call | int_ref |
+		int_literal).setName('operand')
 expr = Forward()
 expr << operatorPrecedence(
 	expr_operand,
@@ -160,35 +189,36 @@ expr << operatorPrecedence(
 expr.setName('expression')
 
 # Integer commands
-ic = lambda op: Group(Suppress('$') + name + op + expr)
+ic = lambda op: Group(Suppress('$') + int_ref + op + expr)
 int_cmd = (ic('=') | ic('+=') | ic('*=') | ic('==') | ic('>') | ic('<') |
 		ic('-=') | ic('/=') | ic('!=') | ic('>=') | ic('<='))
 
 # String commands
 c = Forward()
-str_cmd = Group(Suppress('$') + name + c)
+str_cmd = Group(Suppress('$') + str_ref + c)
 call = lambda cmd: Group(cmd + c)
 str_fun = lambda fun: Group(fun + string)
 str_cmd_operand = (int_cmd | str_cmd | call(NOT) | call(TEST) | call(TRY) |
 		call(DO) | call(FAIL) | call(GOTO) | call(GOPAST) | call(REPEAT) |
 		Group(LOOP + expr + c) | Group(ATLEAST + expr + c) | string |
 		Group('=' + string) | str_fun(INSERT) | str_fun('<+') | str_fun(ATTACH) |
-		str_fun('<-') | DELETE | Group(HOP + expr) | NEXT | Group('=>' + name) |
-		'[' | ']' | Group('->' + name) | Group(SETMARK + name) |
+		str_fun('<-') | DELETE | Group(HOP + expr) | NEXT | Group('=>' + str_ref) |
+		'[' | ']' | Group('->' + str_ref) | Group(SETMARK + int_ref) |
 		Group(TOMARK + expr) | Group(ATMARK + expr) | TOLIMIT | ATLIMIT |
 		Group(SETLIMIT + c + FOR + c) | call(BACKWARDS) | call(REVERSE) | SUBSTRING |
-		Group(AMONG + para_group(ZeroOrMore((str_literal + Optional(name)) +
-		para_group(c)))) | Group(SET + name) | Group(UNSET + name) | name |
-		Group(NON + Optional('-') + name) | TRUE | FALSE | '?')
+		Group(AMONG + para_group(ZeroOrMore((str_literal + Optional(routine_ref)) +
+		para_group(c)))) | Group(SET + boolean_ref) | Group(UNSET + boolean_ref) |
+		name | Group(NON + Optional('-') + grouping_name) | TRUE | FALSE | '?')
+# FIXME: Both routine_name and grouping_name are allowed in str_cmd_operand, but we cannot distinguish them on a syntactic level.
 c << (operatorPrecedence(str_cmd_operand, [(OR | AND, 2, opAssoc.LEFT)]) |
 		para_group(ZeroOrMore(c)))
 
 # Routine definition
-routine_def = DEFINE + name + AS + c
+routine_def = Suppress(DEFINE) + routine_name + Suppress(AS) + c
 
 # Grouping definition
-grouping_def = DEFINE + name + delimitedList(name | str_literal,
-		delim=oneOf('+ -'))
+grouping_def = Suppress(DEFINE) + grouping_ref + delimitedList(grouping_ref |
+		str_literal, delim=oneOf('+ -'))
 
 # Program
 program = Forward()
