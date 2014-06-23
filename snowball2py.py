@@ -174,8 +174,8 @@ declaration = MatchFirst([make_declaration(kw, name, target) for kw, name,
 # Expressions
 MAXINT.setParseAction(replaceWith(str(sys.maxint)))
 MININT.setParseAction(replaceWith(str(-sys.maxint - 1)))
-CURSOR.setParseAction(replaceWith('self.cursor'))
-LIMIT.setParseAction(replaceWith('self.limit'))
+CURSOR.setParseAction(replaceWith('self.string.cursor'))
+LIMIT.setParseAction(replaceWith('self.string.limit'))
 SIZE.setParseAction(replaceWith('len(self.string)'))
 sizeof_call = Suppress(SIZEOF) + str_ref
 sizeof_call.setParseAction(lambda t: "len(%s)" % t[0])
@@ -226,8 +226,8 @@ str_cmd_operand = (int_cmd | str_cmd | call(NOT) | call(TEST) | call(TRY) |
 		para_group(c)))) | Group(SET + boolean_ref) | Group(UNSET + boolean_ref) |
 		name | Group(NON + Optional('-') + grouping_name) | TRUE | FALSE | '?')
 # FIXME: Both routine_name and grouping_name are allowed in str_cmd_operand, but we cannot distinguish them on a syntactic level.
-c << (operatorPrecedence(str_cmd_operand, [(OR | AND, 2, opAssoc.LEFT)]) |
-		para_group(ZeroOrMore(c)))
+# FIXME: Similarly, there is no way to distinguish string and integer assignments on the syntactic level.
+c << operatorPrecedence(str_cmd_operand, [(OR | AND, 2, opAssoc.LEFT)])
 
 # Routine definition
 routine_def = Suppress(DEFINE) + routine_name + Suppress(AS) + c
