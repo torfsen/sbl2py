@@ -102,25 +102,28 @@ class SnowballStringLiteral(Token):
 
 
 # Variables and literals
-def make_name(title):
-	return ~keyword + Word(alphas, alphanums + '_').setName(title + ' name')
+def make_name(title, action):
+	name = ~keyword + Word(alphas, alphanums + '_')
+	name.setName(title + ' name')
+	name.setParseAction(action)
+	return name
 
 def ref_action(var):
 	return lambda t: "self.%s['%s']" % (var, t[0])
 
 name_action = lambda t: repr(t[0])
 
-str_name = make_name('string').setParseAction(name_action)
-grouping_name = make_name('grouping').setParseAction(name_action)
-int_name = make_name('integer').setParseAction(name_action)
-boolean_name = make_name('boolean').setParseAction(name_action)
-routine_name = make_name('routine').setParseAction(name_action)
+str_name = make_name('string', name_action)
+grouping_name = make_name('grouping', name_action)
+int_name = make_name('integer', name_action)
+boolean_name = make_name('boolean', name_action)
+routine_name = make_name('routine', name_action)
 
-str_ref = make_name('string').setParseAction(ref_action('strings'))
-grouping_ref = make_name('grouping').setParseAction(ref_action('groupings'))
-int_ref = make_name('integer').setParseAction(ref_action('integers'))
-boolean_ref = make_name('boolean').setParseAction(ref_action('booleans'))
-routine_ref = make_name('routine').setParseAction(lambda t: "self.%s" % t[0])
+str_ref = make_name('string', ref_action('strings'))
+grouping_ref = make_name('grouping', ref_action('groupings'))
+int_ref = make_name('integer', ref_action('integers'))
+boolean_ref = make_name('boolean', ref_action('booleans'))
+routine_ref = make_name('routine', lambda t: "self.%s" % t[0])
 
 str_literal = SnowballStringLiteral(str_escape_chars, str_defs)
 int_literal = Word(nums).setName('integer literal')
