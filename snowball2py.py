@@ -109,9 +109,9 @@ def make_name(title, action):
 	return name
 
 def ref_action(var):
-	return lambda t: "self.%s['%s']" % (var, t[0])
+	return lambda t: "self.%s_%s" % (var, t[0])
 
-name_action = lambda t: repr(t[0])
+name_action = lambda t: t[0]
 
 str_name = make_name('string', name_action)
 grouping_name = make_name('grouping', name_action)
@@ -119,11 +119,11 @@ int_name = make_name('integer', name_action)
 boolean_name = make_name('boolean', name_action)
 routine_name = make_name('routine', name_action)
 
-str_ref = make_name('string', ref_action('strings'))
-grouping_ref = make_name('grouping', ref_action('groupings'))
-int_ref = make_name('integer', ref_action('integers'))
-boolean_ref = make_name('boolean', ref_action('booleans'))
-routine_ref = make_name('routine', lambda t: "self.%s" % t[0])
+str_ref = make_name('string', ref_action('s'))
+grouping_ref = make_name('grouping', ref_action('g'))
+int_ref = make_name('integer', ref_action('i'))
+boolean_ref = make_name('boolean', ref_action('b'))
+routine_ref = make_name('routine', ref_action('r'))
 
 str_literal = SnowballStringLiteral(str_escape_chars, str_defs)
 int_literal = Word(nums).setName('integer literal')
@@ -158,11 +158,11 @@ routines = []
 groupings = []
 
 def make_declaration(kw, name, target):
-	decl = (Suppress(kw) + Suppress('(') + ZeroOrMore(name) + Suppress(')'))
+	decl = Suppress(kw) + Suppress('(') + ZeroOrMore(name) + Suppress(')')
 
 	def action(tokens):
 		target.extend(tokens)
-		del tokens[:]
+		return []
 
 	decl.setParseAction(action)
 	return decl
@@ -233,13 +233,88 @@ str_cmd_operand = (int_cmd | str_cmd | call(NOT) | call(TEST) | call(TRY) |
 c << operatorPrecedence(str_cmd_operand, [(OR | AND, 2, opAssoc.LEFT)])
 
 # Routine definition
+routine_defs = []
 routine_def = Suppress(DEFINE) + routine_name + Suppress(AS) + c
 
+def routine_def_action(tokens):
+	routine_defs.append('def %s(self): pass' % tokens[0])
+	return []
+
+routine_def.setParseAction(routine_def_action)
+
 # Grouping definition
+grouping_defs = []
 grouping_def = Suppress(DEFINE) + grouping_ref + delimitedList(grouping_ref |
-		str_literal, delim=oneOf('+ -'))
+		str_literal.setParseAction(lambda t: "set(%s)" % t[0]), delim=oneOf('+ -'))
+
+def grouping_def_action(tokens):
+	grouping_defs.append(tokens[0] + " = " + " | ".join(tokens[1:]))
+	return []
+
+grouping_def.setParseAction(grouping_def_action)
 
 # Program
 program = Forward()
 program << ZeroOrMore(declaration | routine_def | grouping_def |
 		Group(BACKWARDMODE + para_group(program)) | str_escapes | str_def)
+
+
+TEMPLATE = """
+
+__all__ = [%(exports)s]
+
+
+class String(object):
+  pass
+
+class Stemmer(object):
+  def __init__(self):
+    %(groupings)s
+    %(integers)s
+    %(booleans)s
+    %(strings)s
+
+  %(routines)s
+
+"""
+
+def translate_file(infile):
+	"""
+	Translate a Snowball file to Python.
+
+	``infile`` is an open readable file containing the Snowball source code. The
+	return value is a string containing the translated Python code.
+	"""
+	program.parseFile(infile)
+
+	exports = ', '.join('"%s"' % e for e in externals)
+	groups = '\n    '.join(grouping_defs)
+	ints = '\n    '.join('self.i_%s = 0' % s for s in integers)
+	bools = '\n    '.join('self.b_%s = False' % s for s in booleans)
+	strs = '\n    '.join('self.s_%s = String("")' % s for s in strings)
+	defs = '\n\n  '.join(routine_defs)
+
+	# TODO: Create wrappers for exported functions that instantiate Stemmer and
+	# call appropriate method, etc.
+
+	return TEMPLATE % {
+		'exports':exports,
+		'groupings':groups,
+		'integers':ints,
+		'booleans':bools,
+		'strings':strs,
+		'routines':defs,
+	}
+
+if __name__ == '__main__':
+
+	import sys
+	import argparse
+	parser = argparse.ArgumentParser(description='Compile Snowball to Python')
+	parser.add_argument('infile', help='Input file (default STDIN)', nargs='?',
+			type=argparse.FileType('r'), default=sys.stdin)
+	parser.add_argument('outfile', help='Output file (default STDOUT)', nargs='?',
+			type=argparse.FileType('w'), default=sys.stdout)
+	args = parser.parse_args()
+
+	args.outfile.write(translate_file(args.infile) + "\n")

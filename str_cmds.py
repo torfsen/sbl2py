@@ -5,13 +5,6 @@
 # Changing that state can not happen in raw expressions and must be wrapped
 # in functions.
 
-class Environment(object):
-
-	def __init__(self):
-		self.integers = {}   # Instead of dicts we could use plain variables here,
-		self.strings = {}    # e.g. ``self.i_foo`` instead of
-		self.booleans = {}   # ``self.integers['foo']``. Saves some unnecessary
-		self.groupings = {}  # method and hash lookups.
 
 class String(object):
 
@@ -87,14 +80,13 @@ class String(object):
 		self.cursor = self.limit
 		return True
 
-env = Environment()
 
 r = True      # Result of last command
 left = None   # Left end of slice
 right = None  # Right end of slice
 
 # At the beginning of a string command ("$x ...") store the target string object
-# in a local variable to minimize lookups: ``x = env.strings['x']``
+# in a local variable to minimize lookups: ``x = self.s_x
 
 # In what follows, variables of the form ``v...`` are dynamic variables, i.e.
 # their names are chosen dynamically and uniquely during compile time to avoid
@@ -213,7 +205,7 @@ r = x.hop(1)
 #
 
 # $x => y
-env.strings['y'].set_chars(x.get_range())
+self.s_y.set_chars(x.get_range())
 r = True
 
 # $x [
@@ -223,7 +215,7 @@ left = x.cursor  # Does not modify ``r``
 right = x.cursor  # Does not modify ``r``
 
 # $x -> y
-r = env.strings['y'].set_chars(x.get_range(left, right))
+r = self.s_y.set_chars(x.get_range(left, right))
 
 # $x <- S
 r = x.set_range(S, left, right)
@@ -241,8 +233,8 @@ r = x.attach(S)
 # Marks
 #
 
-# $x setmark i
-env.integers['i'] = x.cursor
+# $x setmark j
+self.i_j = x.cursor
 r = True
 
 # $x tomark AE
@@ -331,33 +323,33 @@ elif substring_var == 2:
 # Booleans
 #
 
-# $x set b
-env.booleans['b'] = True
+# $x set a
+self.b_a = True
 r = True
 
-# $x unset b
-env.booleans['b'] = False
+# $x unset a
+self.b_a = False
 r = True
 
-# $x b
-r = env.booleans['b']
+# $x a
+r = self.b_a
 
 #
 # Groupings
 #
 
-# $x g
+# $x h
 if x.cursor == x.limit:
 	r = False
 else:
-	r = x.chars[x.cursor] in env.groupings['g']
+	r = x.chars[x.cursor] in self.g_h
 	if r:
 		x.cursor += 1
 
-# $x non g
+# $x non h
 if x.cursor == x.limit:
 	r = False
 else:
-	r = x.chars[x.cursor] not in env.groupings['g']
+	r = x.chars[x.cursor] not in self.g_h
 	if r:
 		x.cursor += 1
