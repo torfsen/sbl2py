@@ -8,10 +8,10 @@
 class Environment(object):
 
 	def __init__(self):
-		self.integers = {}
-		self.strings = {}
-		self.booleans = {}
-		self.groupings = {}
+		self.integers = {}   # Instead of dicts we could use plain variables here,
+		self.strings = {}    # e.g. ``self.i_foo`` instead of
+		self.booleans = {}   # ``self.integers['foo']``. Saves some unnecessary
+		self.groupings = {}  # method and hash lookups.
 
 class String(object):
 
@@ -281,8 +281,51 @@ if r:
 # $x reverse C
 
 #
-# TODO: ``substring`` and ``among``
+# ``substring`` and ``among``
 #
+
+# Although the documentation mentions quite a few shortcuts and special
+# features of ``substring``/``among``, the only form that actually seems to be
+# used in the code is
+#
+#  substring
+#    ...
+#    among( 'S11' 'S12' ... (C1)
+#           'S21' 'S22' ... (C2)
+#           ...
+#
+#           'Sn1' 'Sn2' ... (Cn)
+#         )
+#
+# with (Cn) sometimes being left out (defaults to ``true``). ``substring`` is
+# also sometimes left out, in which case it defaults to being executed right
+# before among. The form without any (Ci) is also used several times, in which
+# case the ``among`` part simply does nothing (assuming the actual matching is
+# done in ``substring``).
+
+# `substring` is equivalent to
+
+r = False
+for v1, v2 in (
+	(Sij, i),  # Sorted descendingly by length.
+	(Skl, k),
+	...
+):
+	if x.startswith(v1):
+		substring_var = v2
+		r = True
+		break
+
+# and the corresponding among then becomes
+
+if substring_var == 1:
+	C1
+elif substring_var == 2:
+	C2
+...
+
+# Since substring/among pairs must match inside the code there is no need to
+# maintain different variants of `substring_var`.
 
 #
 # Booleans
