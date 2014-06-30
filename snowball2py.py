@@ -6,6 +6,7 @@ A Snowball to Python compiler.
 
 import re
 import sys
+import traceback
 
 from pyparsing import *
 
@@ -42,7 +43,7 @@ def str_escapes_action(tokens):
 	str_defs["'"] = "'"
 	str_defs['['] = '['
 	print "String escapes are now", str_escape_chars
-	del tokens[:]
+	return []
 
 str_escapes = Suppress(STRINGESCAPES) + Word(printables, exact=2)
 str_escapes.setParseAction(str_escapes_action)
@@ -142,7 +143,7 @@ def str_def_action(tokens):
 	elif mode == 'decimal':
 		value = ''.join(chr(int(x)) for x in value.split())
 	str_defs[key] = value
-	del tokens[:]
+	return []
 
 str_def = Suppress(STRINGDEF) + Word(printables) + Optional(HEX | DECIMAL,
 		default=None) + str_literal
@@ -215,29 +216,308 @@ int_cmd = int_assign_cmd | int_rel_cmd
 # String commands
 c = Forward()
 str_cmd = Group(Suppress('$') + str_ref + c)
-call = lambda cmd: Group(cmd + c)
-str_fun = lambda fun: Group(fun + string)
-str_cmd_operand = (int_cmd | str_cmd | call(NOT) | call(TEST) | call(TRY) |
-		call(DO) | call(FAIL) | call(GOTO) | call(GOPAST) | call(REPEAT) |
-		Group(LOOP + expr + c) | Group(ATLEAST + expr + c) | string |
-		Group('=' + string) | str_fun(INSERT) | str_fun('<+') | str_fun(ATTACH) |
-		str_fun('<-') | DELETE | Group(HOP + expr) | NEXT | Group('=>' + str_ref) |
-		'[' | ']' | Group('->' + str_ref) | Group(SETMARK + int_ref) |
-		Group(TOMARK + expr) | Group(ATMARK + expr) | TOLIMIT | ATLIMIT |
-		Group(SETLIMIT + c + FOR + c) | call(BACKWARDS) | call(REVERSE) | SUBSTRING |
-		Group(AMONG + para_group(ZeroOrMore((str_literal + Optional(routine_ref)) +
-		para_group(c)))) | Group(SET + boolean_ref) | Group(UNSET + boolean_ref) |
-		name | Group(NON + Optional('-') + grouping_name) | TRUE | FALSE | '?')
+call = lambda cmd: Suppress(cmd) + c
+str_fun = lambda fun: Suppress(fun) + string
+
+
+def remove_empty_lines(s):
+	return '\n'.join(line for line in s.split('\n') if line)
+
+def prefix_lines(s, p):
+	"""
+	Prefix each line of ``s`` by ``p``.
+	"""
+	return p + ('\n' + p).join(s.split('\n'))
+
+
+def debug_exceptions(f):
+
+	def wrapper(*args, **kwargs):
+		try:
+			return f(*args, **kwargs)
+		except:
+			traceback.print_exc()
+			raise
+
+	return wrapper
+
+
+# Variable index for unique local variables
+var_index = 0
+
+def code(s):
+	"""
+	Create a parse action that produces Python code.
+
+	``s`` is a string containing pseudo Python code which is prepared by
+	removing empty lines and replacing words of the form ``v\d*`` with unique
+	identifiers.
+
+	The resulting code is then wrapped into a parse action. The parse action
+	takes a list of tokens and inserts them into the pseudo code. The ``i``-th
+	token replaces the string ``ti``. Similarly, ``Ti`` is replaced by the
+	same token. However, in that case the indentation of ``Ti`` is preserved,
+	even if the token consists of multiple lines.
+	"""
+	global var_index
+
+	s = remove_empty_lines(s)
+
+	for v in set(re.findall(r"\bv\d*\b", s)):
+		unique = "var%d" % var_index
+		var_index += 1
+		s = re.sub(r"\b%s\b" % v, unique, s)
+
+	@debug_exceptions
+	def action(tokens):
+		print "TOKENS:", tokens
+		result = s
+		for t in set(re.findall(r"\bt\d+\b", result)):
+			i = int(t[1:])
+			result = re.sub(r"\b%s\b" % t, tokens[i], result)
+
+		def sub(match):
+			i = int(match.group(2))
+			return prefix_lines(tokens[i], match.group(1))
+
+		result = re.sub(r"( *)T(\d+)\b", sub, result)
+		
+		return result
+
+	return action
+
+CMD_NOT = call(NOT)
+CMD_NOT.setParseAction(code("""
+v = s.cursor
+T0
+if not r:
+  s.cursor = v
+r = not r
+"""))
+
+CMD_TEST = call(TEST)
+CMD_TEST.setParseAction(code("""
+v = s.cursor
+T0
+s.cursor = v
+"""))
+
+CMD_TRY = call(TRY)
+CMD_TRY.setParseAction(code("""
+v = s.cursor
+T0
+if not r:
+  r = True
+  s.cursor = v
+"""))
+
+CMD_DO = call(DO)
+CMD_DO.setParseAction(code("""
+v = s.cursor
+T0
+s.cursor = v
+r = True
+"""))
+
+CMD_FAIL = call(FAIL)
+CMD_FAIL.setParseAction(code("""
+T0
+r = False
+"""))
+
+CMD_GOTO = call(GOTO)
+CMD_GOTO.setParseAction(code("""
+while True:
+  v = x.cursor
+  T0
+  if r or x.cursor == x.limit:
+    x.cursor = v
+    break
+  x.cursor += 1
+"""))
+
+CMD_GOPAST = call(GOPAST)
+CMD_GOPAST.setParseAction(code("""
+while True:
+  T0
+  if r or x.cursor == x.limit:
+    break
+  x.cursor += 1
+"""))
+
+CMD_REPEAT = call(REPEAT)
+CMD_REPEAT.setParseAction(code("""
+while True:
+  v = x.cursor
+  T0
+  if not r:
+    x.cursor = v
+    break
+r = True
+"""))
+
+CMD_LOOP = Suppress(LOOP) + expr + c
+CMD_LOOP.setParseAction(code("""
+for v in range(t0):
+  T1
+"""))
+
+CMD_ATLEAST = Suppress(ATLEAST) + expr + c
+CMD_ATLEAST.setParseAction(code("""
+for v in range(t0):
+  T1
+while True:
+  v = x.cursor
+  T1
+  if not r:
+    x.cursor = v
+    break
+r = True
+"""))
+
+CMD_ASSIGN = Suppress('=') + string
+CMD_ASSIGN.setParseAction(code("""
+r = x.assign(t0)
+"""))
+
+CMD_INSERT = str_fun(INSERT) | str_fun('<+')
+CMD_INSERT.setParseAction(code("""
+r = x.insert(t0)
+"""))
+
+CMD_ATTACH = str_fun(ATTACH)
+CMD_ATTACH.setParseAction(code("""
+r = x.attach(t0)
+"""))
+
+CMD_REPLACE_SLICE = str_fun('<-')
+CMD_REPLACE_SLICE.setParseAction(code("""
+r = x.set_range(t0, left, right)
+"""))
+
+CMD_EXPORT_SLICE = Suppress('->') + str_ref
+CMD_EXPORT_SLICE.setParseAction(code("""
+r = t0.set_chars(x.get_range(left, right))
+"""))
+
+CMD_HOP = Suppress(HOP) + expr
+CMD_HOP.setParseAction(code("""
+r = x.hop(t0)
+"""))
+
+CMD_SET_STRING = Suppress('=>') + str_ref
+CMD_SET_STRING.setParseAction(code("""
+t0.set_chars(x.get_range())
+r = True
+"""))
+
+CMD_SET_LEFT_MARK = Literal('[')
+CMD_SET_LEFT_MARK.setParseAction(code("""
+left = x.cursor
+"""))
+
+CMD_SET_RIGHT_MARK = Literal(']')
+CMD_SET_RIGHT_MARK.setParseAction(code("""
+right = x.cursor
+"""))
+
+CMD_SETMARK = Suppress(SETMARK) + int_ref
+CMD_SETMARK.setParseAction(code("""
+self.i_j = x.cursor
+r = True
+"""))
+
+CMD_TOMARK = Suppress(TOMARK) + expr
+CMD_TOMARK.setParseAction(code("""
+r = x.tomark(t0)
+"""))
+
+CMD_ATMARK = Group(ATMARK + expr)
+CMD_ATMARK.setParseAction(code("""
+r = (x.cursor == t0)
+"""))
+
+CMD_SETLIMIT = Group(SETLIMIT + c + FOR + c)
+CMD_SETLIMIT.setParseAction(code("""
+v1 = x.cursor
+v2 = x.limit
+T0
+if r:
+  x.limit = x.cursor
+  x.cursor = v1
+  T1
+  x.limit = v2
+"""))
+
+CMD_BACKWARDS = call(BACKWARDS)
+
+CMD_REVERSE = call(REVERSE)
+
+CMD_AMONG = Group(AMONG + para_group(ZeroOrMore((str_literal +
+		Optional(routine_ref)) + para_group(c))))
+
+CMD_SET = Suppress(SET) + boolean_ref
+CMD_SET.setParseAction(code("""
+t0 = True
+r = True
+"""))
+
+CMD_UNSET = Suppress(UNSET) + boolean_ref
+CMD_UNSET.setParseAction(code("""
+t0 = False
+r = True
+"""))
+
+CMD_NON = Suppress(NON + Optional('-')) + grouping_ref
+CMD_NON.setParseAction(code("""
+if x.cursor == x.limit:
+  r = False
+else:
+  r = x.chars[x.cursor] not in t0
+  if r:
+    x.cursor += 1
+"""))
+
+CMD_DELETE = Suppress(DELETE)
+CMD_DELETE.setParseAction(code("""
+r = x.set_range('', left, right)
+"""))
+
+CMD_ATLIMIT = Suppress(ATLIMIT)
+CMD_ATLIMIT.setParseAction(code("""
+r = (x.cursor == x.limit)
+"""))
+
+CMD_TOLIMIT = Suppress(TOLIMIT)
+CMD_TOLIMIT.setParseAction(code("""
+r = x.tolimit()
+"""))
+
+str_cmd_operand = (int_cmd | str_cmd | CMD_NOT | CMD_TEST | CMD_TRY | CMD_DO |
+		CMD_FAIL | CMD_GOTO | CMD_GOPAST | CMD_REPEAT | CMD_LOOP | CMD_ATLEAST |
+		string | CMD_ASSIGN | CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE |
+		CMD_DELETE | CMD_HOP | NEXT | CMD_SET_STRING | CMD_SET_LEFT_MARK |
+		CMD_SET_RIGHT_MARK | CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK |
+		CMD_ATMARK | CMD_TOLIMIT | CMD_ATLIMIT | CMD_SETLIMIT | CMD_BACKWARDS |
+		CMD_REVERSE | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET | name |
+		CMD_NON | TRUE | FALSE | '?')
 # FIXME: Both routine_name and grouping_name are allowed in str_cmd_operand, but we cannot distinguish them on a syntactic level.
 # FIXME: Similarly, there is no way to distinguish string and integer assignments on the syntactic level.
-c << operatorPrecedence(str_cmd_operand, [(OR | AND, 2, opAssoc.LEFT)])
+c << operatorPrecedence(
+	str_cmd_operand,
+	[
+		(OR | AND, 2, opAssoc.LEFT),
+		(Empty(), 2, opAssoc.LEFT, lambda t: '\n'.join(t[0])), # Concatenation without operator
+		]                                         # FIXME: We need to abort concatenated chains after a false result
+)
 
 # Routine definition
 routine_defs = []
 routine_def = Suppress(DEFINE) + routine_name + Suppress(AS) + c
 
 def routine_def_action(tokens):
-	routine_defs.append('def %s(self): pass' % tokens[0])
+	code = prefix_lines(tokens[1], '    ')
+	routine_defs.append('def r_%s(self, s):\n%s' % (tokens[0], code))
 	return []
 
 routine_def.setParseAction(routine_def_action)
@@ -255,19 +535,20 @@ grouping_def.setParseAction(grouping_def_action)
 
 # Program
 program = Forward()
-program << ZeroOrMore(declaration | routine_def | grouping_def |
-		Group(BACKWARDMODE + para_group(program)) | str_escapes | str_def)
+program << (ZeroOrMore(declaration | routine_def | grouping_def |
+		Group(BACKWARDMODE + para_group(program)) | str_escapes | str_def) +
+		StringEnd())
 
 
 TEMPLATE = """
-
 __all__ = [%(exports)s]
 
 
-class String(object):
+class _String(object):
   pass
 
-class Stemmer(object):
+
+class _Program(object):
   def __init__(self):
     %(groupings)s
     %(integers)s
@@ -276,7 +557,10 @@ class Stemmer(object):
 
   %(routines)s
 
+%(functions)s
 """
+
+
 
 def translate_file(infile):
 	"""
@@ -285,7 +569,7 @@ def translate_file(infile):
 	``infile`` is an open readable file containing the Snowball source code. The
 	return value is a string containing the translated Python code.
 	"""
-	program.parseFile(infile)
+	code = program.parseFile(infile)
 
 	exports = ', '.join('"%s"' % e for e in externals)
 	groups = '\n    '.join(grouping_defs)
@@ -294,8 +578,10 @@ def translate_file(infile):
 	strs = '\n    '.join('self.s_%s = String("")' % s for s in strings)
 	defs = '\n\n  '.join(routine_defs)
 
-	# TODO: Create wrappers for exported functions that instantiate Stemmer and
-	# call appropriate method, etc.
+	external_funs = []
+	for ext in externals:
+		external_funs.append('%s = lambda s: _Program().r_%s(s)' % (ext, ext))
+	funs = '\n'.join(external_funs)
 
 	return TEMPLATE % {
 		'exports':exports,
@@ -304,7 +590,8 @@ def translate_file(infile):
 		'booleans':bools,
 		'strings':strs,
 		'routines':defs,
-	}
+		'functions':funs,
+	} + repr(code)
 
 if __name__ == '__main__':
 
