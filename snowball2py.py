@@ -49,7 +49,7 @@ str_escapes = Suppress(STRINGESCAPES) + Word(printables, exact=2)
 str_escapes.setParseAction(str_escapes_action)
 
 
-class SnowballStringLiteral(Token):
+class StringLiteral(Token):
 	"""
 	String literal that supports dynamically changing escape characters.
 	"""
@@ -65,15 +65,15 @@ class SnowballStringLiteral(Token):
 
 		``replacements`` is a dict that maps escape sequences to their replacements.
 		"""
-		super(SnowballStringLiteral, self).__init__()
+		super(StringLiteral, self).__init__()
 		self.escape_chars = escape_chars
 		self.replacements = replacements
 
 	def __str__(self):
 		if self.escape_chars:
-			return 'SnowballStringLiteral("%s%s")' % self.escape_chars
+			return 'StringLiteral("%s%s")' % self.escape_chars
 		else:
-			return 'SnowballStringLiteral("")'
+			return 'StringLiteral("")'
 
 	def parseImpl(self, instring, loc, doActions=True):
 		if instring[loc] != "'":
@@ -103,33 +103,80 @@ class SnowballStringLiteral(Token):
 
 
 # Variables and literals
-def make_name(title, action):
-	name = ~keyword + Word(alphas, alphanums + '_')
-	name.setName(title + ' name')
-	name.setParseAction(action)
-	return name
+name = ~keyword + Word(alphas, alphanums + '_')
+name.setParseAction(lambda t: t[0])
 
-def ref_action(var):
-	return lambda t: "self.%s_%s" % (var, t[0])
+# Declarations
+strings = []
+integers = []
+externals = []
+booleans = []
+routines = []
+groupings = []
 
-name_action = lambda t: t[0]
+def make_declaration(kw, target):
+	decl = Suppress(kw) + Suppress('(') + ZeroOrMore(name) + Suppress(')')
 
-str_name = make_name('string', name_action)
-grouping_name = make_name('grouping', name_action)
-int_name = make_name('integer', name_action)
-boolean_name = make_name('boolean', name_action)
-routine_name = make_name('routine', name_action)
+	def action(tokens):
+		target.extend(tokens)
+		return []
 
-str_ref = make_name('string', ref_action('s'))
-grouping_ref = make_name('grouping', ref_action('g'))
-int_ref = make_name('integer', ref_action('i'))
-boolean_ref = make_name('boolean', ref_action('b'))
-routine_ref = make_name('routine', ref_action('r'))
+	decl.setParseAction(action)
+	return decl
+		
+declaration = MatchFirst([make_declaration(kw, target) for kw, target in [
+	(STRINGS, strings), (INTEGERS, integers), (BOOLEANS, booleans),
+	(ROUTINES, routines), (EXTERNALS, externals), (GROUPINGS, groupings)
+]])
 
-str_literal = SnowballStringLiteral(str_escape_chars, str_defs)
+
+# Chars that are valid in a ``Reference``
+REFERENCE_CHARS = set(alphanums + '_')
+
+class Reference(Token):
+	"""
+	A reference to a previously declared variable.
+
+	This class works like pyparsing's ``Or`` in combination with ``Keyword``.
+	However, the list of candidates can be updated later on.
+	"""
+
+	def __init__(self, declarations):
+		"""
+		Constructor.
+
+		``declarations`` is a list of previously declared variables. Any of them
+		will match if they occur as a separate word (cf. ``Keyword``). Matching is
+		done in decreasing length of candidates (cf. ``Or``). Later updates of
+		``declarations`` are taken into account.
+		"""
+		super(Reference, self).__init__()
+		self.declarations = declarations
+
+	def __str__(self):
+		return 'Reference(%s)' % self.declarations
+
+	def parseImpl(self, instring, loc, doActions=True):
+		candidates = sorted(self.declarations, key=lambda x: len(x), reverse=True)
+		for candidate in candidates:
+			if instring.startswith(candidate, loc):
+				n = len(candidate)
+				if (len(instring) == loc + n or instring[loc + n] not in
+						REFERENCE_CHARS):
+					return loc + n, candidate
+		raise ParseException("Expected one of " + ", ".join(candidates))
+
+
+str_ref = Reference(strings)
+grouping_ref = Reference(groupings)
+int_ref = Reference(integers)
+boolean_ref = Reference(booleans)
+routine_ref = Reference(routines)
+
+str_literal = StringLiteral(str_escape_chars, str_defs)
 int_literal = Word(nums).setName('integer literal')
-string = str_name | str_literal
-grouping = grouping_name | str_literal
+string = str_ref | str_literal
+grouping = grouping_ref | str_literal
 
 
 # String definitions
@@ -149,31 +196,6 @@ str_def = Suppress(STRINGDEF) + Word(printables) + Optional(HEX | DECIMAL,
 		default=None) + str_literal
 str_def.setParseAction(str_def_action)
 
-
-# Declarations
-strings = []
-integers = []
-externals = []
-booleans = []
-routines = []
-groupings = []
-
-def make_declaration(kw, name, target):
-	decl = Suppress(kw) + Suppress('(') + ZeroOrMore(name) + Suppress(')')
-
-	def action(tokens):
-		target.extend(tokens)
-		return []
-
-	decl.setParseAction(action)
-	return decl
-		
-declaration = MatchFirst([make_declaration(kw, name, target) for kw, name,
-		target in [
-	(STRINGS, str_name, strings), (INTEGERS, int_name, integers),
-	(BOOLEANS, boolean_name, booleans), (ROUTINES, routine_name, routines),
-	(EXTERNALS, routine_name, externals), (GROUPINGS, grouping_name, groupings)
-]])
 
 # Expressions
 MAXINT.setParseAction(replaceWith(str(sys.maxint)))
@@ -200,7 +222,7 @@ expr.setName('expression')
 
 # Integer commands
 def make_int_assign_cmd(op, name):
-	cmd = (Suppress('$') + int_name + Suppress(op) + expr)
+	cmd = (Suppress('$') + int_ref + Suppress(op) + expr)
 	cmd.setParseAction(lambda t: 'self._int_%s(%s, %s)' % (name, t[0], t[1]))
 	return cmd
 
@@ -437,7 +459,7 @@ CMD_ATMARK.setParseAction(code("""
 r = (x.cursor == t0)
 """))
 
-CMD_SETLIMIT = Group(SETLIMIT + c + FOR + c)
+CMD_SETLIMIT = Suppress(SETLIMIT) + c + Suppress(FOR) + c
 CMD_SETLIMIT.setParseAction(code("""
 v1 = x.cursor
 v2 = x.limit
@@ -499,10 +521,8 @@ str_cmd_operand = (int_cmd | str_cmd | CMD_NOT | CMD_TEST | CMD_TRY | CMD_DO |
 		CMD_DELETE | CMD_HOP | NEXT | CMD_SET_STRING | CMD_SET_LEFT_MARK |
 		CMD_SET_RIGHT_MARK | CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK |
 		CMD_ATMARK | CMD_TOLIMIT | CMD_ATLIMIT | CMD_SETLIMIT | CMD_BACKWARDS |
-		CMD_REVERSE | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET | name |
-		CMD_NON | TRUE | FALSE | '?')
-# FIXME: Both routine_name and grouping_name are allowed in str_cmd_operand, but we cannot distinguish them on a syntactic level.
-# FIXME: Similarly, there is no way to distinguish string and integer assignments on the syntactic level.
+		CMD_REVERSE | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET | routine_ref |
+		grouping_ref | CMD_NON | TRUE | FALSE | '?')
 c << operatorPrecedence(
 	str_cmd_operand,
 	[
@@ -513,7 +533,7 @@ c << operatorPrecedence(
 
 # Routine definition
 routine_defs = []
-routine_def = Suppress(DEFINE) + routine_name + Suppress(AS) + c
+routine_def = Suppress(DEFINE) + routine_ref + Suppress(AS) + c
 
 def routine_def_action(tokens):
 	code = prefix_lines(tokens[1], '    ')
@@ -528,7 +548,7 @@ grouping_def = Suppress(DEFINE) + grouping_ref + delimitedList(grouping_ref |
 		str_literal.setParseAction(lambda t: "set(%s)" % t[0]), delim=oneOf('+ -'))
 
 def grouping_def_action(tokens):
-	grouping_defs.append(tokens[0] + " = " + " | ".join(tokens[1:]))
+	grouping_defs.append('self.g_' + tokens[0] + " = " + " | ".join(tokens[1:]))
 	return []
 
 grouping_def.setParseAction(grouping_def_action)
