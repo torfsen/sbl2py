@@ -114,19 +114,21 @@ booleans = []
 routines = []
 groupings = []
 
-def make_declaration(kw, target):
+def make_declaration(kw, targets):
 	decl = Suppress(kw) + Suppress('(') + ZeroOrMore(name) + Suppress(')')
 
 	def action(tokens):
-		target.extend(tokens)
+		for target in targets:
+			target.extend(tokens)
 		return []
 
 	decl.setParseAction(action)
 	return decl
 		
-declaration = MatchFirst([make_declaration(kw, target) for kw, target in [
-	(STRINGS, strings), (INTEGERS, integers), (BOOLEANS, booleans),
-	(ROUTINES, routines), (EXTERNALS, externals), (GROUPINGS, groupings)
+declaration = MatchFirst([make_declaration(kw, targets) for kw, targets in [
+	(STRINGS, [strings]), (INTEGERS, [integers]), (BOOLEANS, [booleans]),
+	(ROUTINES, [routines]), (EXTERNALS, [externals, routines]),
+	(GROUPINGS, [groupings])
 ]])
 
 
@@ -535,9 +537,18 @@ c << operatorPrecedence(
 routine_defs = []
 routine_def = Suppress(DEFINE) + routine_ref + Suppress(AS) + c
 
+
+ROUTINE_TEMPLATE = """
+  def r_%(name)s(self, s):
+%(code)s
+    return s
+"""
+
 def routine_def_action(tokens):
-	code = prefix_lines(tokens[1], '    ')
-	routine_defs.append('def r_%s(self, s):\n%s' % (tokens[0], code))
+	routine_defs.append(ROUTINE_TEMPLATE % {
+		'name':tokens[0],
+		'code':prefix_lines(tokens[1], '    ')
+	})
 	return []
 
 routine_def.setParseAction(routine_def_action)
@@ -560,10 +571,7 @@ program << (ZeroOrMore(declaration | routine_def | grouping_def |
 		StringEnd())
 
 
-TEMPLATE = """
-__all__ = [%(exports)s]
-
-
+MODULE_TEMPLATE = """
 class _String(object):
   pass
 
@@ -591,7 +599,6 @@ def translate_file(infile):
 	"""
 	code = program.parseFile(infile)
 
-	exports = ', '.join('"%s"' % e for e in externals)
 	groups = '\n    '.join(grouping_defs)
 	ints = '\n    '.join('self.i_%s = 0' % s for s in integers)
 	bools = '\n    '.join('self.b_%s = False' % s for s in booleans)
@@ -603,8 +610,7 @@ def translate_file(infile):
 		external_funs.append('%s = lambda s: _Program().r_%s(s)' % (ext, ext))
 	funs = '\n'.join(external_funs)
 
-	return TEMPLATE % {
-		'exports':exports,
+	return MODULE_TEMPLATE % {
 		'groupings':groups,
 		'integers':ints,
 		'booleans':bools,
