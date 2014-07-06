@@ -42,7 +42,6 @@ def str_escapes_action(tokens):
 	str_escape_chars[:] = tokens[0]
 	str_defs["'"] = "'"
 	str_defs['['] = '['
-	print "String escapes are now", str_escape_chars
 	return []
 
 str_escapes = Suppress(STRINGESCAPES) + Word(printables, exact=2)
@@ -295,9 +294,7 @@ def code(s):
 		var_index += 1
 		s = re.sub(r"\b%s\b" % v, unique, s)
 
-	@debug_exceptions
 	def action(tokens):
-		print "TOKENS:", tokens
 		result = s
 		for t in set(re.findall(r"\bt\d+\b", result)):
 			i = int(t[1:])
@@ -592,7 +589,6 @@ class _Program(object):
 """
 
 
-
 def translate_file(infile):
 	"""
 	Translate a Snowball file to Python.
@@ -600,7 +596,14 @@ def translate_file(infile):
 	``infile`` is an open readable file containing the Snowball source code. The
 	return value is a string containing the translated Python code.
 	"""
-	code = program.parseFile(infile)
+	return translate_code(infile.read())
+
+
+def translate_code(code):
+	"""
+	Translate a Snowball code string to Python.
+	"""
+	py_code = program.parseString(code)
 
 	groups = '\n    '.join(grouping_defs)
 	ints = '\n    '.join('self.i_%s = 0' % s for s in integers)
@@ -620,7 +623,7 @@ def translate_file(infile):
 		'strings':strs,
 		'routines':defs,
 		'functions':funs,
-	} + repr(code)
+	}
 
 if __name__ == '__main__':
 
