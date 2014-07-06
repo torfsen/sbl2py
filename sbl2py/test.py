@@ -8,8 +8,40 @@ import imp
 import os
 import tempfile
 import traceback
+import unittest
 
 import sbl2py
+
+
+def _deinterlace(seq):
+	"""
+	Deinterlace a sequence into two sequences.
+	"""
+	return seq[::2], seq[1::2]
+
+
+class TestCase(unittest.TestCase):
+
+	# Note: Violates PEP8 to comply with ``unittest.TestCase`` style.
+
+	def assertSnowball(self, code, routine, *args):
+		"""
+		``code`` is automatically prefixed with an externals declaration for the
+		given routine name.
+		"""
+		if not args:
+			return
+		if len(args) % 2 != 0:
+			raise ValueError('Numbers of inputs and expected outputs must match.')
+		code = ("externals (%s)\n" % routine) + code
+		pycode = sbl2py.translate_code(code)
+		module = _module_from_code('sbl2py_testmodule', pycode)
+		fun = getattr(module, routine)
+		inputs, expected = _deinterlace(args)
+		for i, e in zip(inputs, expected):
+			o = fun(i)
+			self.assertEqual(o, e, "Wrong output for '%s': Expected '%s', got '%s'."
+					% (i, e, o))
 
 
 def _module_from_code(name, code):
@@ -92,7 +124,6 @@ if __name__ == '__main__':
 
 	filename = sys.argv[1]
 	routine = sys.argv[2]
-	inputs = sys.argv[3::2]
-	expected = sys.argv[4::2]
+	inputs, expected = _deinterlace(sys.argv[3:])
 
 	test_file(filename, routine, zip(inputs, expected))
