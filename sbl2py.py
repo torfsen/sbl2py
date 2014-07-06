@@ -169,10 +169,13 @@ class Reference(Token):
 		raise ParseException("Expected one of " + ", ".join(candidates))
 
 
-str_ref = Reference(strings)
-grouping_ref = Reference(groupings)
-int_ref = Reference(integers)
-boolean_ref = Reference(booleans)
+def make_ref_action(prefix):
+	return lambda t: 'self.' + prefix + '_' + t[0]
+
+str_ref = Reference(strings).setParseAction(make_ref_action('s'))
+grouping_ref = Reference(groupings).setParseAction(make_ref_action('g'))
+int_ref = Reference(integers).setParseAction(make_ref_action('i'))
+boolean_ref = Reference(booleans).setParseAction(make_ref_action('b'))
 routine_ref = Reference(routines)
 
 str_literal = StringLiteral(str_escape_chars, str_defs)
@@ -559,7 +562,7 @@ grouping_def = Suppress(DEFINE) + grouping_ref + delimitedList(grouping_ref |
 		str_literal.setParseAction(lambda t: "set(%s)" % t[0]), delim=oneOf('+ -'))
 
 def grouping_def_action(tokens):
-	grouping_defs.append('self.g_' + tokens[0] + " = " + " | ".join(tokens[1:]))
+	grouping_defs.append(tokens[0] + " = " + " | ".join(tokens[1:]))
 	return []
 
 grouping_def.setParseAction(grouping_def_action)
