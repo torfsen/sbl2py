@@ -10,6 +10,8 @@ import traceback
 
 from pyparsing import *
 
+ParserElement.enablePackrat()
+
 
 def para_group(x):
 	return Group(Suppress('(') + x + Suppress(')'))
