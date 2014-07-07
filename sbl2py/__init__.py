@@ -595,6 +595,9 @@ class _String(object):
     self.cursor = 0
     self.limit = len(s)
 
+  def __str__(self):
+    return ''.join(self.chars)
+
   def assign(self, value):
     self.chars[self.cursor:self.limit] = value
     self.limit = self.cursor + len(value)
@@ -695,7 +698,7 @@ def translate_code(code):
 
 	external_funs = []
 	for ext in externals:
-		external_funs.append('%s = lambda s: _Program().r_%s(_String(s))' % (ext, ext))
+		external_funs.append('%s = lambda s: str(_Program().r_%s(_String(s)))' % (ext, ext))
 	funs = '\n'.join(external_funs)
 
 	return MODULE_TEMPLATE % {
