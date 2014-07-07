@@ -119,7 +119,7 @@ if __name__ == '__main__':
 	import sys
 
 	if len(sys.argv) < 5 or len(sys.argv) % 2 != 1:
-		sys.stderr.write('Syntax: %s FILENAME ROUTINE INPUT1 OUTPUT1 [INPUT2 OUTPUT2 ...]\n')
+		sys.stderr.write('Syntax: %s FILENAME ROUTINE INPUT1 OUTPUT1 [INPUT2 OUTPUT2 ...]\n' % sys.argv[0])
 		sys.exit(1)
 
 	filename = sys.argv[1]
