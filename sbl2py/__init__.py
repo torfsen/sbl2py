@@ -573,7 +573,73 @@ program << (ZeroOrMore(declaration | routine_def | grouping_def |
 
 MODULE_TEMPLATE = """
 class _String(object):
-  pass
+
+  def __init__(self, s):
+    self.chars = list(s)
+    self.cursor = 0
+    self.limit = len(s)
+
+  def assign(self, value):
+    self.chars[self.cursor:self.limit] = value
+    self.limit = self.cursor + len(value)
+    return True
+
+  def insert(self, value):
+    self.attach(value)
+    self.cursor += len(value)
+    self.limit += len(value)
+    return True
+
+  def attach(self, value):
+    self.chars[self.cursor:self.cursor] = value
+    return True
+
+  def set_chars(self, value):
+    self.chars = value[:]
+    self.cursor = 0
+    self.limit = len(value)
+    return True
+
+  def get_range(self, start=None, end=None):
+    if start is None:
+      start = self.cursor
+    if end is None:
+      end = self.limit
+    return self.chars[start:end]
+
+  def set_range(self, values, start, end):
+    if start > end or end > self.cursor:
+      raise ValueError('Invalid range.')
+    self.chars[start:end] = values
+    change = len(values) - (end - start)
+    self.cursor += change
+    self.limit += change
+    return True
+
+  def startswith(self, value):
+    if self.limit - self.cursor < len(value):
+      return False
+    value = list(value)
+    if self.chars[self.cursor:self.cursor + len(value)] == value:
+      self.cursor = self.cursor + len(value)
+      return True
+    return False
+
+  def hop(self, n):
+    if self.limit - self.cursor < n:
+      return False
+    self.cursor += n
+    return True
+
+  def tomark(self, i):
+    if self.cursor > i or self.limit < i:
+      return False
+    self.cursor = i
+    return True
+
+  def tolimit(self):
+    self.cursor = self.limit
+    return True
 
 
 class _Program(object):
@@ -613,7 +679,7 @@ def translate_code(code):
 
 	external_funs = []
 	for ext in externals:
-		external_funs.append('%s = lambda s: _Program().r_%s(s)' % (ext, ext))
+		external_funs.append('%s = lambda s: _Program().r_%s(_String(s))' % (ext, ext))
 	funs = '\n'.join(external_funs)
 
 	return MODULE_TEMPLATE % {
