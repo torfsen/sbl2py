@@ -352,30 +352,30 @@ r = False
 CMD_GOTO = call(GOTO)
 CMD_GOTO.setParseAction(code("""
 while True:
-  v = x.cursor
+  v = s.cursor
   T0
-  if r or x.cursor == x.limit:
-    x.cursor = v
+  if r or s.cursor == s.limit:
+    s.cursor = v
     break
-  x.cursor += 1
+  s.cursor += 1
 """))
 
 CMD_GOPAST = call(GOPAST)
 CMD_GOPAST.setParseAction(code("""
 while True:
   T0
-  if r or x.cursor == x.limit:
+  if r or s.cursor == s.limit:
     break
-  x.cursor += 1
+  s.cursor += 1
 """))
 
 CMD_REPEAT = call(REPEAT)
 CMD_REPEAT.setParseAction(code("""
 while True:
-  v = x.cursor
+  v = s.cursor
   T0
   if not r:
-    x.cursor = v
+    s.cursor = v
     break
 r = True
 """))
@@ -391,86 +391,86 @@ CMD_ATLEAST.setParseAction(code("""
 for v in range(t0):
   T1
 while True:
-  v = x.cursor
+  v = s.cursor
   T1
   if not r:
-    x.cursor = v
+    s.cursor = v
     break
 r = True
 """))
 
 CMD_ASSIGN = Suppress('=') + string
 CMD_ASSIGN.setParseAction(code("""
-r = x.assign(t0)
+r = s.assign(t0)
 """))
 
 CMD_INSERT = str_fun(INSERT) | str_fun('<+')
 CMD_INSERT.setParseAction(code("""
-r = x.insert(t0)
+r = s.insert(t0)
 """))
 
 CMD_ATTACH = str_fun(ATTACH)
 CMD_ATTACH.setParseAction(code("""
-r = x.attach(t0)
+r = s.attach(t0)
 """))
 
 CMD_REPLACE_SLICE = str_fun('<-')
 CMD_REPLACE_SLICE.setParseAction(code("""
-r = x.set_range(t0, left, right)
+r = s.set_range(t0, left, right)
 """))
 
 CMD_EXPORT_SLICE = Suppress('->') + str_ref
 CMD_EXPORT_SLICE.setParseAction(code("""
-r = t0.set_chars(x.get_range(left, right))
+r = t0.set_chars(s.get_range(left, right))
 """))
 
 CMD_HOP = Suppress(HOP) + expr
 CMD_HOP.setParseAction(code("""
-r = x.hop(t0)
+r = s.hop(t0)
 """))
 
 CMD_SET_STRING = Suppress('=>') + str_ref
 CMD_SET_STRING.setParseAction(code("""
-t0.set_chars(x.get_range())
+t0.set_chars(s.get_range())
 r = True
 """))
 
 CMD_SET_LEFT_MARK = Literal('[')
 CMD_SET_LEFT_MARK.setParseAction(code("""
-left = x.cursor
+left = s.cursor
 """))
 
 CMD_SET_RIGHT_MARK = Literal(']')
 CMD_SET_RIGHT_MARK.setParseAction(code("""
-right = x.cursor
+right = s.cursor
 """))
 
 CMD_SETMARK = Suppress(SETMARK) + int_ref
 CMD_SETMARK.setParseAction(code("""
-self.i_j = x.cursor
+self.i_j = s.cursor
 r = True
 """))
 
 CMD_TOMARK = Suppress(TOMARK) + expr
 CMD_TOMARK.setParseAction(code("""
-r = x.tomark(t0)
+r = s.tomark(t0)
 """))
 
 CMD_ATMARK = Group(ATMARK + expr)
 CMD_ATMARK.setParseAction(code("""
-r = (x.cursor == t0)
+r = (s.cursor == t0)
 """))
 
 CMD_SETLIMIT = Suppress(SETLIMIT) + c + Suppress(FOR) + c
 CMD_SETLIMIT.setParseAction(code("""
-v1 = x.cursor
-v2 = x.limit
+v1 = s.cursor
+v2 = s.limit
 T0
 if r:
-  x.limit = x.cursor
-  x.cursor = v1
+  s.limit = s.cursor
+  s.cursor = v1
   T1
-  x.limit = v2
+  s.limit = v2
 """))
 
 CMD_BACKWARDS = call(BACKWARDS)
@@ -494,32 +494,48 @@ r = True
 
 CMD_NON = Suppress(NON + Optional('-')) + grouping_ref
 CMD_NON.setParseAction(code("""
-if x.cursor == x.limit:
+if s.cursor == s.limit:
   r = False
 else:
-  r = x.chars[x.cursor] not in t0
+  r = s.chars[s.cursor] not in t0
   if r:
-    x.cursor += 1
+    s.cursor += 1
 """))
 
 CMD_DELETE = Suppress(DELETE)
 CMD_DELETE.setParseAction(code("""
-r = x.set_range('', left, right)
+r = s.set_range('', left, right)
 """))
 
 CMD_ATLIMIT = Suppress(ATLIMIT)
 CMD_ATLIMIT.setParseAction(code("""
-r = (x.cursor == x.limit)
+r = (s.cursor == s.limit)
 """))
 
 CMD_TOLIMIT = Suppress(TOLIMIT)
 CMD_TOLIMIT.setParseAction(code("""
-r = x.tolimit()
+r = s.tolimit()
 """))
+
+CMD_STARTSWITH = string.copy()
+CMD_STARTSWITH.setParseAction(code("""
+r = s.startswith(t0)
+"""))
+
+
+@debug_exceptions
+def make_chain(tokens):
+	if not tokens:
+		chain = ''
+	elif len(tokens) == 1:
+		chain = tokens[0]
+	else:
+		chain = tokens[0] + "\nif r:\n" + prefix_lines(make_chain(tokens[1:]), '  ')
+	return chain
 
 str_cmd_operand = (int_cmd | str_cmd | CMD_NOT | CMD_TEST | CMD_TRY | CMD_DO |
 		CMD_FAIL | CMD_GOTO | CMD_GOPAST | CMD_REPEAT | CMD_LOOP | CMD_ATLEAST |
-		string | CMD_ASSIGN | CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE |
+		CMD_STARTSWITH | CMD_ASSIGN | CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE |
 		CMD_DELETE | CMD_HOP | NEXT | CMD_SET_STRING | CMD_SET_LEFT_MARK |
 		CMD_SET_RIGHT_MARK | CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK |
 		CMD_ATMARK | CMD_TOLIMIT | CMD_ATLIMIT | CMD_SETLIMIT | CMD_BACKWARDS |
@@ -529,8 +545,8 @@ c << operatorPrecedence(
 	str_cmd_operand,
 	[
 		(OR | AND, 2, opAssoc.LEFT),
-		(Empty(), 2, opAssoc.LEFT, lambda t: '\n'.join(t[0])), # Concatenation without operator
-		]                                         # FIXME: We need to abort concatenated chains after a false result
+		(Empty(), 2, opAssoc.LEFT, lambda t: make_chain(t[0])), # Concatenation without operator
+		]
 )
 
 # Routine definition
