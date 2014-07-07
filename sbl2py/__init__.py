@@ -625,15 +625,3 @@ def translate_code(code):
 		'functions':funs,
 	}
 
-if __name__ == '__main__':
-
-	import sys
-	import argparse
-	parser = argparse.ArgumentParser(description='Compile Snowball to Python')
-	parser.add_argument('infile', help='Input file (default STDIN)', nargs='?',
-			type=argparse.FileType('r'), default=sys.stdin)
-	parser.add_argument('outfile', help='Output file (default STDOUT)', nargs='?',
-			type=argparse.FileType('w'), default=sys.stdout)
-	args = parser.parse_args()
-
-	args.outfile.write(translate_file(args.infile) + "\n")
