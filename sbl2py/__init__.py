@@ -206,9 +206,9 @@ str_def.setParseAction(str_def_action)
 # Expressions
 MAXINT.setParseAction(replaceWith(str(sys.maxint)))
 MININT.setParseAction(replaceWith(str(-sys.maxint - 1)))
-CURSOR.setParseAction(replaceWith('self.string.cursor'))
-LIMIT.setParseAction(replaceWith('self.string.limit'))
-SIZE.setParseAction(replaceWith('len(self.string)'))
+CURSOR.setParseAction(replaceWith('s.cursor'))
+LIMIT.setParseAction(replaceWith('s.limit'))
+SIZE.setParseAction(replaceWith('len(s)'))
 sizeof_call = Suppress(SIZEOF) + str_ref
 sizeof_call.setParseAction(lambda t: "len(%s)" % t[0])
 expr_operand = (MAXINT | MININT | CURSOR | LIMIT | SIZE | sizeof_call | int_ref |
@@ -558,6 +558,7 @@ routine_def = Suppress(DEFINE) + routine_ref + Suppress(AS) + c
 
 ROUTINE_TEMPLATE = """
   def r_%(name)s(self, s):
+    r = True
 %(code)s
     return s
 """
