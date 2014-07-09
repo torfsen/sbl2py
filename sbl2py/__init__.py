@@ -712,7 +712,7 @@ def reset():
 	"""
 	Reset parser state.
 	"""
-	global strings, integers, externals, booleans, routines, groupings, grouping_defs, routine_defs
+	global strings, integers, externals, booleans, routines, groupings, grouping_defs, routine_defs, var_index
 	strings[:] = []
 	integers[:] = []
 	externals[:] = []
@@ -720,6 +720,7 @@ def reset():
 	groupings[:] = []
 	grouping_defs[:] = []
 	routine_defs[:] = []
+	var_index = 0
 
 
 def translate_string(code, testing=False):
