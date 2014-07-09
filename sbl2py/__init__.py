@@ -109,7 +109,13 @@ class StringLiteral(Token):
 name = ~keyword + Word(alphas, alphanums + '_')
 name.setParseAction(lambda t: t[0])
 
-# Declarations
+
+# Parse actions that correspond to Snowball declarations (``strings (...)``,
+# ``booleans (...)``, ...) don't produce code but modify the parser's state by
+# storing the declared names. This is necessary so that we can later correctly
+# interpret the occurence of a declared name. The following lists hold the
+# various declared names:
+
 strings = []
 integers = []
 externals = []
@@ -706,6 +712,19 @@ def translate_file(infile, *args, **kwargs):
 	"""
 	return translate_string(infile.read(), *args, **kwargs)
 
+def reset():
+	"""
+	Reset parser state.
+	"""
+	global strings, integers, externals, booleans, routines, groupings, grouping_defs, routine_defs
+	strings[:] = []
+	integers[:] = []
+	externals[:] = []
+	routines[:] = []
+	groupings[:] = []
+	grouping_defs[:] = []
+	routine_defs[:] = []
+
 
 def translate_string(code, testing=False):
 	"""
@@ -715,6 +734,7 @@ def translate_string(code, testing=False):
 	the original ``_String`` object and the ``_Program`` instance that created
 	it. This is useful for checking that variables have been computed correctly.
 	"""
+	reset()
 	py_code = program.parseString(code)
 
 	groups = '\n'.join(grouping_defs)
