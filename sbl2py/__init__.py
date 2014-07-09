@@ -227,15 +227,13 @@ expr << operatorPrecedence(
 expr.setName('expression')
 
 # Integer commands
-def make_int_assign_cmd(op, name):
+def make_int_assign_cmd(op):
 	cmd = (Suppress('$') + int_ref + Suppress(op) + expr)
-	cmd.setParseAction(lambda t: 'self._int_%s(%s, %s)' % (name, t[0], t[1]))
+	cmd.setParseAction(lambda t: '%s %s %s' % (t[0], op, t[1]))
 	return cmd
 
-int_assign_cmd = MatchFirst(make_int_assign_cmd(op, name) for op, name in [
-	('=', 'assign'), ('+=', 'add_assign'), ('*=', 'mult_assign'),
-	('-=', 'sub_assign'), ('/=', 'div_assign')
-])
+int_assign_cmd = MatchFirst(make_int_assign_cmd(op) for op in
+		('=', '+=', '*=', '-=', '/='))
 int_rel_cmd = Suppress('$') + int_ref + oneOf('== > < != >= <=') + expr
 int_rel_cmd.setParseAction(lambda t: '(' + ' '.join(t) + ')')
 int_cmd = int_assign_cmd | int_rel_cmd
