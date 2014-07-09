@@ -677,19 +677,34 @@ class _Program(object):
 """
 
 
-def translate_file(infile):
+FUNCTION_TEMPLATE = '%s = lambda s: str(_Program().r_%s(_String(s)))'
+
+TEST_FUNCTION_TEMPLATE = """
+def %s(s):
+  p = _Program()
+  return p.r_%s(_String(s)), p
+"""
+
+# TODO: Groupings are constant and can be defined on the module level
+
+
+def translate_file(infile, *args, **kwargs):
 	"""
 	Translate a Snowball file to Python.
 
 	``infile`` is an open readable file containing the Snowball source code. The
 	return value is a string containing the translated Python code.
 	"""
-	return translate_code(infile.read())
+	return translate_string(infile.read(), *args, **kwargs)
 
 
-def translate_code(code):
+def translate_string(code, testing=False):
 	"""
 	Translate a Snowball code string to Python.
+
+	If ``testing`` is ``True`` then the external Snowball routines return both
+	the original ``_String`` object and the ``_Program`` instance that created
+	it. This is useful for checking that variables have been computed correctly.
 	"""
 	py_code = program.parseString(code)
 
@@ -700,8 +715,9 @@ def translate_code(code):
 	defs = '\n\n  '.join(routine_defs)
 
 	external_funs = []
+	template = TEST_FUNCTION_TEMPLATE if testing else FUNCTION_TEMPLATE
 	for ext in externals:
-		external_funs.append('%s = lambda s: str(_Program().r_%s(_String(s)))' % (ext, ext))
+		external_funs.append(template % (ext, ext))
 	funs = '\n'.join(external_funs)
 
 	return MODULE_TEMPLATE % {
@@ -712,4 +728,3 @@ def translate_code(code):
 		'routines':defs,
 		'functions':funs,
 	}
-

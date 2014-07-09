@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 
-from sbl2py import translate_file
-
-
 import sys
 import argparse
+
+from sbl2py import translate_file
+
 parser = argparse.ArgumentParser(description='Compile Snowball to Python')
 parser.add_argument('infile', help='Input file (default STDIN)', nargs='?',
 		type=argparse.FileType('r'), default=sys.stdin)
 parser.add_argument('outfile', help='Output file (default STDOUT)', nargs='?',
 		type=argparse.FileType('w'), default=sys.stdout)
+parser.add_argument('-t', '--testing', help='Generate code for easier testing',
+		action="store_true")
 args = parser.parse_args()
 
-args.outfile.write(translate_file(args.infile) + "\n")
+args.outfile.write(translate_file(args.infile, testing=args.testing) + "\n")

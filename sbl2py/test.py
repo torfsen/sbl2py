@@ -13,35 +13,56 @@ import unittest
 import sbl2py
 
 
-def _deinterlace(seq):
-	"""
-	Deinterlace a sequence into two sequences.
-	"""
-	return seq[::2], seq[1::2]
-
-
 class TestCase(unittest.TestCase):
 
 	# Note: Violates PEP8 to comply with ``unittest.TestCase`` style.
 
-	def assertSnowball(self, code, routine, *args):
+	def assertSnowball(self, code, tests, routine='check'):
 		"""
+		Test that compiling and executing a piece of Snowball code works.
+
 		``code`` is automatically prefixed with an externals declaration for the
 		given routine name.
+
+		``tests`` is a sequence of test cases. Each test case is a sequence which
+		contains at least the test input and expected output. The test case may
+		also contain dicts of expected attribute values for the attributes of the
+		``_String`` and ``_Program`` instances.
 		"""
-		if not args:
-			return
-		if len(args) % 2 != 0:
-			raise ValueError('Numbers of inputs and expected outputs must match.')
 		code = ("externals (%s)\n" % routine) + code
-		pycode = sbl2py.translate_code(code)
-		module = _module_from_code('sbl2py_testmodule', pycode)
+		pycode = sbl2py.translate_string(code, testing=True)
+
+		def msg(s):
+			return s + "\n\nSnowball code:\n\n" + code + "\n\nPython code:\n\n" + pycode
+
+		try:
+			module = _module_from_code('sbl2py_testmodule', pycode)
+		except SyntaxError as e:
+			print msg("Generated code is invalid: %s" % e)
+			raise
+
 		fun = getattr(module, routine)
-		inputs, expected = _deinterlace(args)
-		for i, e in zip(inputs, expected):
-			o = fun(i)
-			self.assertEqual(o, e, "Wrong output for '%s': Expected '%s', got '%s'."
-					% (i, e, o))
+
+		for test in tests:
+			string = test[0]
+			expected = test[1]
+			s_attrs = test[2] if len(test) > 2 else {}
+			p_attrs = test[3] if len(test) > 3 else {}
+
+			output, program = fun(string)
+			self.assertEqual(str(output), expected, msg(
+					"Wrong output for '%s': Expected '%s', got '%s'." % (string, expected,
+					output)))
+			for attr, exp_value in s_attrs.iteritems():
+				value = getattr(output, attr)
+				self.assertEqual(value, exp_value, msg(
+						"Wrong value for string attribute '%s': Expected '%s', got '%s'." %
+						(attr, exp_value, value)))
+			for attr, exp_value in p_attrs.iteritems():
+				value = getattr(program, attr)
+				self.assertEqual(value, exp_value, msg(
+						"Wrong value for program attribute '%s': Expected '%s', got '%s'." %
+						(attr, exp_value, value)))
 
 
 def _module_from_code(name, code):
@@ -124,6 +145,7 @@ if __name__ == '__main__':
 
 	filename = sys.argv[1]
 	routine = sys.argv[2]
-	inputs, expected = _deinterlace(sys.argv[3:])
+	inputs = sys.argv[3::2]
+	expected = sys.argv[4::2]
 
 	test_file(filename, routine, zip(inputs, expected))

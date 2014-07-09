@@ -9,15 +9,20 @@ from sbl2py.test import TestCase
 
 class TestSbl2Py(TestCase):
 
-	def test(self):
+	def test_startswith(self):
 		self.assertSnowball(
 			"""
-			booleans (b)
-			define check as (set b)
+			define check as ('foo')
 			""",
-			'check',
-			'foo', 'foo',
-			'bar', 'bar'
+			(
+				('foo', 'foo', {'cursor':3}),
+				('f', 'f', {'cursor':0}),
+				('fo', 'fo', {'cursor':0}),
+				('bar', 'bar', {'cursor':0}),
+				('xfoo', 'xfoo', {'cursor':0}),
+				('Foo', 'Foo', {'cursor':0}),
+				('fooo', 'fooo', {'cursor':3}),
+			)
 		)
 
 
