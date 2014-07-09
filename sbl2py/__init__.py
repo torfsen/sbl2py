@@ -249,9 +249,10 @@ str_fun = lambda fun: Suppress(fun) + string
 
 
 
-def debug_exceptions(f):
+def debug_parse_action(f):
 
 	def wrapper(*args, **kwargs):
+		print '%s(%s, %s)' % (f.__name__, ', '.join(repr(a) for a in args), ', '.join('%s=%s' % (k, repr(v)) for k, v in kwargs.iteritems()))
 		try:
 			return f(*args, **kwargs)
 		except:
@@ -516,8 +517,26 @@ CMD_STARTSWITH.setParseAction(code("""
 r = s.startswith(t0)
 """))
 
+and_action = code("""
+v = s.cursor
+T0
+if r:
+  s.cursor = v
+  T1
+""")
 
-@debug_exceptions
+or_action = code("""
+v = s.cursor
+T0
+if not r:
+  s.cursor = v
+  T1
+""")
+
+
+def debug(*args):
+	print args
+
 def make_chain(tokens):
 	if not tokens:
 		chain = ''
@@ -538,7 +557,8 @@ str_cmd_operand = (int_cmd | str_cmd | CMD_NOT | CMD_TEST | CMD_TRY | CMD_DO |
 c << operatorPrecedence(
 	str_cmd_operand,
 	[
-		(OR | AND, 2, opAssoc.LEFT),
+		(Suppress(AND), 2, opAssoc.LEFT, and_action),
+		(Suppress(OR), 2, opAssoc.LEFT, or_action),
 		(Empty(), 2, opAssoc.LEFT, lambda t: make_chain(t[0])), # Concatenation without operator
 		]
 )
