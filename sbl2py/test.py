@@ -30,7 +30,12 @@ class TestCase(unittest.TestCase):
 		``_String`` and ``_Program`` instances.
 		"""
 		code = ("externals (%s)\n" % routine) + code
-		pycode = sbl2py.translate_string(code, testing=True)
+
+		try:
+			pycode = sbl2py.translate_string(code, testing=True)
+		except Exception as e:
+			print "Could not translate the following Snowball code:\n\n" + code
+			raise
 
 		def msg(s):
 			return s + "\n\nSnowball code:\n\n" + code + "\n\nPython code:\n\n" + pycode
@@ -56,8 +61,8 @@ class TestCase(unittest.TestCase):
 			for attr, exp_value in s_attrs.iteritems():
 				value = getattr(output, attr)
 				self.assertEqual(value, exp_value, msg(
-						"Wrong value for string attribute '%s': Expected '%s', got '%s'." %
-						(attr, exp_value, value)))
+						"Wrong value for string attribute '%s': Expected '%s', got '%s'. Input was '%s', output was '%s'." %
+						(attr, exp_value, value, string, output)))
 			for attr, exp_value in p_attrs.iteritems():
 				value = getattr(program, attr)
 				self.assertEqual(value, exp_value, msg(
