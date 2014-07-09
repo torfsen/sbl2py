@@ -250,7 +250,6 @@ int_cmd = int_assign_cmd | int_rel_cmd
 # String commands
 c = Forward()
 str_cmd = Group(Suppress('$') + str_ref + c)
-call = lambda cmd: Suppress(cmd) + c
 str_fun = lambda fun: Suppress(fun) + string
 
 
@@ -311,47 +310,41 @@ def code(s):
 
 	return action
 
-CMD_NOT = call(NOT)
-CMD_NOT.setParseAction(code("""
+not_action = code("""
 v = s.cursor
 T0
 if not r:
   s.cursor = v
 r = not r
-"""))
+""")
 
-CMD_TEST = call(TEST)
-CMD_TEST.setParseAction(code("""
+test_action = code("""
 v = s.cursor
 T0
 s.cursor = v
-"""))
+""")
 
-CMD_TRY = call(TRY)
-CMD_TRY.setParseAction(code("""
+try_action = code("""
 v = s.cursor
 T0
 if not r:
   r = True
   s.cursor = v
-"""))
+""")
 
-CMD_DO = call(DO)
-CMD_DO.setParseAction(code("""
+do_action = code("""
 v = s.cursor
 T0
 s.cursor = v
 r = True
-"""))
+""")
 
-CMD_FAIL = call(FAIL)
-CMD_FAIL.setParseAction(code("""
+fail_action = code("""
 T0
 r = False
-"""))
+""")
 
-CMD_GOTO = call(GOTO)
-CMD_GOTO.setParseAction(code("""
+goto_action = code("""
 while True:
   v = s.cursor
   T0
@@ -359,19 +352,17 @@ while True:
     s.cursor = v
     break
   s.cursor += 1
-"""))
+""")
 
-CMD_GOPAST = call(GOPAST)
-CMD_GOPAST.setParseAction(code("""
+gopast_action = code("""
 while True:
   T0
   if r or s.cursor == s.limit:
     break
   s.cursor += 1
-"""))
+""")
 
-CMD_REPEAT = call(REPEAT)
-CMD_REPEAT.setParseAction(code("""
+repeat_action = code("""
 while True:
   v = s.cursor
   T0
@@ -379,7 +370,7 @@ while True:
     s.cursor = v
     break
 r = True
-"""))
+""")
 
 CMD_LOOP = Suppress(LOOP) + expr + c
 CMD_LOOP.setParseAction(code("""
@@ -474,10 +465,6 @@ if r:
   s.limit = v2
 """))
 
-CMD_BACKWARDS = call(BACKWARDS)
-
-CMD_REVERSE = call(REVERSE)
-
 CMD_AMONG = Group(AMONG + para_group(ZeroOrMore((str_literal +
 		Optional(routine_ref)) + para_group(c))))
 
@@ -552,22 +539,31 @@ def make_chain(tokens):
 		chain = tokens[0] + "\nif r:\n" + prefix_lines(make_chain(tokens[1:]), '  ')
 	return chain
 
-str_cmd_operand = (int_cmd | str_cmd | CMD_NOT | CMD_TEST | CMD_TRY | CMD_DO |
-		CMD_FAIL | CMD_GOTO | CMD_GOPAST | CMD_REPEAT | CMD_LOOP | CMD_ATLEAST |
-		CMD_STARTSWITH | CMD_ASSIGN | CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE |
-		CMD_DELETE | CMD_HOP | NEXT | CMD_SET_STRING | CMD_SET_LEFT_MARK |
-		CMD_SET_RIGHT_MARK | CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK |
-		CMD_ATMARK | CMD_TOLIMIT | CMD_ATLIMIT | CMD_SETLIMIT | CMD_BACKWARDS |
-		CMD_REVERSE | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET | routine_ref |
-		grouping_ref | CMD_NON | TRUE | FALSE | '?')
+str_cmd_operand = (int_cmd | str_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
+		CMD_ASSIGN | CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE | CMD_DELETE |
+		CMD_HOP | NEXT | CMD_SET_STRING | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
+		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
+		CMD_ATLIMIT | CMD_SETLIMIT | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET |
+		routine_ref | grouping_ref | CMD_NON | TRUE | FALSE | '?')
 c << operatorPrecedence(
 	str_cmd_operand,
 	[
 		(Suppress(AND), 2, opAssoc.LEFT, and_action),
 		(Suppress(OR), 2, opAssoc.LEFT, or_action),
+		(Suppress(NOT), 1, opAssoc.RIGHT, not_action),
+		(Suppress(TEST), 1, opAssoc.RIGHT, test_action),
+		(Suppress(TRY), 1, opAssoc.RIGHT, try_action),
+		(Suppress(DO), 1, opAssoc.RIGHT, do_action),
+		(Suppress(FAIL), 1, opAssoc.RIGHT, fail_action),
+		(Suppress(GOTO), 1, opAssoc.RIGHT, goto_action),
+		(Suppress(GOPAST), 1, opAssoc.RIGHT, gopast_action),
+		(Suppress(REPEAT), 1, opAssoc.RIGHT, repeat_action),
+		(Suppress(REVERSE), 1, opAssoc.RIGHT), # FIXME: Add action
 		(Empty(), 2, opAssoc.LEFT, lambda t: make_chain(t[0])), # Concatenation without operator
-		]
+	]
 )
+
+# FIXME: Add ``backwards`` sections
 
 # Routine definition
 routine_defs = []

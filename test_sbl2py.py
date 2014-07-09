@@ -50,6 +50,41 @@ class TestSbl2Py(TestCase):
 			)
 		)
 
+	def test_not(self):
+		self.assertSnowball(
+			"""
+			define check as (not 'foo')
+			""",
+			(
+				('foo', 'foo', {'cursor':3}),
+				('fox', 'fox', {'cursor':0}),
+			)
+		)
+
+	def test_try(self):
+		self.assertSnowball(
+			"""
+			define check as (try 'foo' 'bar')
+			""",
+			(
+				('foo', 'foo', {'cursor':3}),
+				('bar', 'bar', {'cursor':3}),
+				('foobar', 'foobar', {'cursor':6}),
+			)
+		)
+
+	def test_test(self):
+		self.assertSnowball(
+			"""
+			define check as (test 'foo' 'fo')
+			""",
+			(
+				('foo', 'foo', {'cursor':2}),
+				('fox', 'fox', {'cursor':0}),
+				('bar', 'bar', {'cursor':0}),
+			)
+		)
+
 
 if __name__ == '__main__':
 	import unittest
