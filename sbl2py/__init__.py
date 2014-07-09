@@ -171,12 +171,12 @@ class Reference(Token):
 
 
 def make_ref_action(prefix):
-	return lambda t: 'self.' + prefix + '_' + t[0]
+	return lambda t: prefix + '_' + t[0]
 
-str_ref = Reference(strings).setParseAction(make_ref_action('s'))
-grouping_ref = Reference(groupings).setParseAction(make_ref_action('g'))
-int_ref = Reference(integers).setParseAction(make_ref_action('i'))
-boolean_ref = Reference(booleans).setParseAction(make_ref_action('b'))
+str_ref = Reference(strings).setParseAction(make_ref_action('self.s'))
+grouping_ref = Reference(groupings).setParseAction(make_ref_action('_g'))
+int_ref = Reference(integers).setParseAction(make_ref_action('self._i'))
+boolean_ref = Reference(booleans).setParseAction(make_ref_action('self._b'))
 routine_ref = Reference(routines)
 
 str_literal = StringLiteral(str_escape_chars, str_defs)
@@ -663,10 +663,11 @@ class _String(object):
     self.cursor = self.limit
     return True
 
+%(groupings)s
 
 class _Program(object):
   def __init__(self):
-    %(groupings)s
+    pass
     %(integers)s
     %(booleans)s
     %(strings)s
@@ -684,9 +685,6 @@ def %s(s):
   p = _Program()
   return p.r_%s(_String(s)), p
 """
-
-# TODO: Groupings are constant and can be defined on the module level
-
 
 def translate_file(infile, *args, **kwargs):
 	"""
@@ -708,7 +706,7 @@ def translate_string(code, testing=False):
 	"""
 	py_code = program.parseString(code)
 
-	groups = '\n    '.join(grouping_defs)
+	groups = '\n'.join(grouping_defs)
 	ints = '\n    '.join('self.i_%s = 0' % s for s in integers)
 	bools = '\n    '.join('self.b_%s = False' % s for s in booleans)
 	strs = '\n    '.join('self.s_%s = String("")' % s for s in strings)
