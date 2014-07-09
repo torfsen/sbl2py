@@ -10,6 +10,8 @@ import traceback
 
 from pyparsing import *
 
+from sbl2py.utils import *
+
 ParserElement.enablePackrat()
 
 
@@ -246,15 +248,6 @@ call = lambda cmd: Suppress(cmd) + c
 str_fun = lambda fun: Suppress(fun) + string
 
 
-def remove_empty_lines(s):
-	return '\n'.join(line for line in s.split('\n') if line)
-
-def prefix_lines(s, p):
-	"""
-	Prefix each line of ``s`` by ``p``.
-	"""
-	return p + ('\n' + p).join(s.split('\n'))
-
 
 def debug_exceptions(f):
 
@@ -295,6 +288,7 @@ def code(s):
 		s = re.sub(r"\b%s\b" % v, unique, s)
 
 	def action(tokens):
+		tokens = extract(tokens, lambda x: isinstance(x, basestring))
 		result = s
 		for t in set(re.findall(r"\bt\d+\b", result)):
 			i = int(t[1:])
@@ -674,7 +668,6 @@ class _Program(object):
 
 %(functions)s
 """
-
 
 FUNCTION_TEMPLATE = '%s = lambda s: str(_Program().r_%s(_String(s)))'
 
