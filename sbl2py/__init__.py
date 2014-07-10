@@ -179,18 +179,21 @@ class Reference(Token):
 
 
 def make_ref_action(prefix):
-	return lambda t: prefix + '_' + t[0]
+	return lambda t: prefix + t[0]
 
-str_ref = Reference(strings).setParseAction(make_ref_action('self.s'))
-grouping_ref = Reference(groupings).setParseAction(make_ref_action('_g'))
-int_ref = Reference(integers).setParseAction(make_ref_action('self._i'))
-boolean_ref = Reference(booleans).setParseAction(make_ref_action('self._b'))
+str_ref = Reference(strings).setParseAction(make_ref_action('self.s_'))
+grouping_ref = Reference(groupings).setParseAction(make_ref_action('_g_'))
+int_ref = Reference(integers).setParseAction(make_ref_action('self.i_'))
+boolean_ref = Reference(booleans).setParseAction(make_ref_action('self.b_'))
 routine_ref = Reference(routines)
 
 str_literal = StringLiteral(str_escape_chars, str_defs)
 int_literal = Word(nums).setName('integer literal')
 string = str_ref | str_literal
 grouping = grouping_ref | str_literal
+
+str_ref_chars = str_ref.copy()
+str_ref_chars.setParseAction(lambda t: 'self.s_' + t[0] + '.chars')
 
 
 # String definitions
@@ -227,7 +230,7 @@ expr = Forward()
 expr << operatorPrecedence(
 	expr_operand,
 	[
-		('-', 1, opAssoc.RIGHT),
+		('-', 1, opAssoc.RIGHT, lambda t: ''.join(t[0])),
 		(oneOf('* /'), 2, opAssoc.LEFT, mult_action),
 		(oneOf('+ -'), 2, opAssoc.LEFT, add_action)
 	]
@@ -250,9 +253,8 @@ int_cmd = int_assign_cmd | int_rel_cmd
 # String commands
 c = Forward()
 str_cmd = Group(Suppress('$') + str_ref + c)
-str_fun = lambda fun: Suppress(fun) + string
 
-
+str_fun = lambda fun: Suppress(fun) + (str_literal | str_ref_chars)
 
 def debug_parse_action(f):
 
@@ -275,88 +277,79 @@ def code(s):
 	Create a parse action that produces Python code.
 
 	``s`` is a string containing pseudo Python code which is prepared by
-	removing empty lines and replacing words of the form ``v\d*`` with unique
+	removing empty lines and replacing words of the form ``<v\d*>`` with unique
 	identifiers.
 
 	The resulting code is then wrapped into a parse action. The parse action
 	takes a list of tokens and inserts them into the pseudo code. The ``i``-th
-	token replaces the string ``ti``. Similarly, ``Ti`` is replaced by the
-	same token. However, in that case the indentation of ``Ti`` is preserved,
-	even if the token consists of multiple lines.
+	token replaces the string ``<i>``. Indentation is preserved.
 	"""
 	global var_index
 
 	s = remove_empty_lines(s)
 
-	for v in set(re.findall(r"\bv\d*\b", s)):
+	for v in set(re.findall(r"<v\d*>", s)):
 		unique = "var%d" % var_index
 		var_index += 1
-		s = re.sub(r"\b%s\b" % v, unique, s)
+		s = s.replace(v, unique)
 
 	def action(tokens):
 		tokens = extract(tokens, lambda x: isinstance(x, basestring))
-		result = s
-		for t in set(re.findall(r"\bt\d+\b", result)):
-			i = int(t[1:])
-			result = re.sub(r"\b%s\b" % t, tokens[i], result)
 
 		def sub(match):
-			i = int(match.group(2))
-			return prefix_lines(tokens[i], match.group(1))
+			return prefix_lines(tokens[int(match.group(2))], match.group(1))
 
-		result = re.sub(r"( *)T(\d+)\b", sub, result)
-		
-		return result
+		return re.sub(r"( *)<t(\d+)>", sub, s)
 
 	return action
 
 not_action = code("""
-v = s.cursor
-T0
+<v> = s.cursor
+<t0>
 if not r:
-  s.cursor = v
+  s.cursor = <v>
 r = not r
 """)
 
 test_action = code("""
-v = s.cursor
-T0
-s.cursor = v
+<v> = s.cursor
+<t0>
+s.cursor = <v>
 """)
 
 try_action = code("""
-v = s.cursor
-T0
+<v> = s.cursor
+<t0>
 if not r:
   r = True
-  s.cursor = v
+  s.cursor = <v>
 """)
 
 do_action = code("""
-v = s.cursor
-T0
-s.cursor = v
+<v> = s.cursor
+<t0>
+s.cursor = <v>
 r = True
 """)
 
 fail_action = code("""
-T0
+<t0>
 r = False
 """)
 
 goto_action = code("""
 while True:
-  v = s.cursor
-  T0
+  <v> = s.cursor
+  <t0>
   if r or s.cursor == s.limit:
-    s.cursor = v
+    s.cursor = <v>
     break
   s.cursor += 1
 """)
 
 gopast_action = code("""
 while True:
-  T0
+  <t0>
   if r or s.cursor == s.limit:
     break
   s.cursor += 1
@@ -364,105 +357,100 @@ while True:
 
 repeat_action = code("""
 while True:
-  v = s.cursor
-  T0
+  <v> = s.cursor
+  <t0>
   if not r:
-    s.cursor = v
+    s.cursor = <v>
     break
 r = True
 """)
 
 CMD_LOOP = Suppress(LOOP) + expr + c
 CMD_LOOP.setParseAction(code("""
-for v in range(t0):
-  T1
+for <v> in xrange(<t0>):
+  <t1>
 """))
 
 CMD_ATLEAST = Suppress(ATLEAST) + expr + c
 CMD_ATLEAST.setParseAction(code("""
-for v in range(t0):
-  T1
+for <v> in xrange(<t0>):
+  <t1>
 while True:
-  v = s.cursor
-  T1
+  <v> = s.cursor
+  <t1>
   if not r:
-    s.cursor = v
+    s.cursor = <v>
     break
 r = True
 """))
 
-CMD_ASSIGN = Suppress('=') + string
-CMD_ASSIGN.setParseAction(code("""
-r = s.assign(t0)
-"""))
-
-CMD_INSERT = str_fun(INSERT) | str_fun('<+')
+CMD_INSERT = str_fun(INSERT | '<+')
 CMD_INSERT.setParseAction(code("""
-r = s.insert(t0)
+r = s.insert(<t0>)
 """))
 
 CMD_ATTACH = str_fun(ATTACH)
 CMD_ATTACH.setParseAction(code("""
-r = s.attach(t0)
+r = s.attach(<t0>)
 """))
 
 CMD_REPLACE_SLICE = str_fun('<-')
 CMD_REPLACE_SLICE.setParseAction(code("""
-r = s.set_range(t0, left, right)
+r = s.set_range(<t0>, self.left, self.right)
 """))
 
 CMD_EXPORT_SLICE = Suppress('->') + str_ref
 CMD_EXPORT_SLICE.setParseAction(code("""
-r = t0.set_chars(s.get_range(left, right))
+r = <t0>.set_chars(s.get_range(self.left, self.right))
 """))
 
 CMD_HOP = Suppress(HOP) + expr
 CMD_HOP.setParseAction(code("""
-r = s.hop(t0)
+r = s.hop(<t0>)
 """))
 
-CMD_SET_STRING = Suppress('=>') + str_ref
-CMD_SET_STRING.setParseAction(code("""
-t0.set_chars(s.get_range())
-r = True
+CMD_NEXT = Suppress(NEXT)
+CMD_NEXT.setParseAction(code("""
+r = s.hop(1)
 """))
+
 
 CMD_SET_LEFT_MARK = Literal('[')
 CMD_SET_LEFT_MARK.setParseAction(code("""
-left = s.cursor
+self.left = s.cursor
 """))
 
 CMD_SET_RIGHT_MARK = Literal(']')
 CMD_SET_RIGHT_MARK.setParseAction(code("""
-right = s.cursor
+self.right = s.cursor
 """))
 
 CMD_SETMARK = Suppress(SETMARK) + int_ref
 CMD_SETMARK.setParseAction(code("""
-self.i_j = s.cursor
+<t0> = s.cursor
 r = True
 """))
 
 CMD_TOMARK = Suppress(TOMARK) + expr
 CMD_TOMARK.setParseAction(code("""
-r = s.tomark(t0)
+r = s.tomark(<t0>)
 """))
 
-CMD_ATMARK = Group(ATMARK + expr)
+CMD_ATMARK = Suppress(ATMARK) + expr
 CMD_ATMARK.setParseAction(code("""
-r = (s.cursor == t0)
+r = (s.cursor == <t0>)
 """))
 
 CMD_SETLIMIT = Suppress(SETLIMIT) + c + Suppress(FOR) + c
 CMD_SETLIMIT.setParseAction(code("""
-v1 = s.cursor
-v2 = s.limit
-T0
+<v1> = s.cursor
+<v2> = len(s) - s.limit
+<t0>
 if r:
   s.limit = s.cursor
-  s.cursor = v1
-  T1
-  s.limit = v2
+  s.cursor = <v1>
+  <t1>
+  s.limit = len(s) - <v2>
 """))
 
 CMD_AMONG = Group(AMONG + para_group(ZeroOrMore((str_literal +
@@ -470,13 +458,13 @@ CMD_AMONG = Group(AMONG + para_group(ZeroOrMore((str_literal +
 
 CMD_SET = Suppress(SET) + boolean_ref
 CMD_SET.setParseAction(code("""
-t0 = True
+<t0> = True
 r = True
 """))
 
 CMD_UNSET = Suppress(UNSET) + boolean_ref
 CMD_UNSET.setParseAction(code("""
-t0 = False
+<t0> = False
 r = True
 """))
 
@@ -485,14 +473,14 @@ CMD_NON.setParseAction(code("""
 if s.cursor == s.limit:
   r = False
 else:
-  r = s.chars[s.cursor] not in t0
+  r = s.chars[s.cursor] not in <t0>
   if r:
     s.cursor += 1
 """))
 
 CMD_DELETE = Suppress(DELETE)
 CMD_DELETE.setParseAction(code("""
-r = s.set_range('', left, right)
+r = s.set_range('', self.left, self.right)
 """))
 
 CMD_ATLIMIT = Suppress(ATLIMIT)
@@ -507,23 +495,28 @@ r = s.tolimit()
 
 CMD_STARTSWITH = string.copy()
 CMD_STARTSWITH.setParseAction(code("""
-r = s.startswith(t0)
+r = s.startswith(<t0>)
+"""))
+
+CMD_ROUTINE = routine_ref.copy()
+CMD_ROUTINE.setParseAction(code("""
+r = self.r_<t0>(s)
 """))
 
 and_action = code("""
-v = s.cursor
-T0
+<v> = s.cursor
+<t0>
 if r:
-  s.cursor = v
-  T1
+  s.cursor = <v>
+  <t1>
 """)
 
 or_action = code("""
-v = s.cursor
-T0
+<v> = s.cursor
+<t0>
 if not r:
-  s.cursor = v
-  T1
+  s.cursor = <v>
+  <t1>
 """)
 
 
@@ -540,11 +533,11 @@ def make_chain(tokens):
 	return chain
 
 str_cmd_operand = (int_cmd | str_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
-		CMD_ASSIGN | CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE | CMD_DELETE |
-		CMD_HOP | NEXT | CMD_SET_STRING | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
+		CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE | CMD_DELETE |
+		CMD_HOP | CMD_NEXT | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
 		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
 		CMD_ATLIMIT | CMD_SETLIMIT | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET |
-		routine_ref | grouping_ref | CMD_NON | TRUE | FALSE | '?')
+		CMD_ROUTINE | grouping_ref | CMD_NON | TRUE | FALSE | '?')
 c << operatorPrecedence(
 	str_cmd_operand,
 	[
@@ -574,7 +567,7 @@ ROUTINE_TEMPLATE = """
   def r_%(name)s(self, s):
     r = True
 %(code)s
-    return s
+    return r
 """
 
 def routine_def_action(tokens):
@@ -589,7 +582,7 @@ routine_def.setParseAction(routine_def_action)
 # Grouping definition
 grouping_defs = []
 grouping_def = Suppress(DEFINE) + grouping_ref + delimitedList(grouping_ref |
-		str_literal.setParseAction(lambda t: "set(%s)" % t[0]), delim=oneOf('+ -'))
+		str_literal.copy().setParseAction(lambda t: "set(%s)" % t[0]), delim=oneOf('+ -'))
 
 def grouping_def_action(tokens):
 	grouping_defs.append(tokens[0] + " = " + " | ".join(tokens[1:]))
@@ -614,6 +607,9 @@ class _String(object):
 
   def __str__(self):
     return ''.join(self.chars)
+
+  def __len__(self):
+    return len(self.chars)
 
   def assign(self, value):
     self.chars[self.cursor:self.limit] = value
@@ -662,7 +658,7 @@ class _String(object):
     return False
 
   def hop(self, n):
-    if self.limit - self.cursor < n:
+    if n < 0 or self.limit - self.cursor < n:
       return False
     self.cursor += n
     return True
@@ -681,7 +677,8 @@ class _String(object):
 
 class _Program(object):
   def __init__(self):
-    pass
+    self.left = None
+    self.right = None
     %(integers)s
     %(booleans)s
     %(strings)s
@@ -691,12 +688,19 @@ class _Program(object):
 %(functions)s
 """
 
-FUNCTION_TEMPLATE = '%s = lambda s: str(_Program().r_%s(_String(s)))'
+FUNCTION_TEMPLATE = """
+def %s(s):
+  s = _String(s)
+  _Program().r_%s(s)
+  return str(s)
+"""
 
 TEST_FUNCTION_TEMPLATE = """
 def %s(s):
   p = _Program()
-  return p.r_%s(_String(s)), p
+  s = _String(s)
+  p.r_%s(s)
+  return s, p
 """
 
 def translate_file(infile, *args, **kwargs):
@@ -737,7 +741,7 @@ def translate_string(code, testing=False):
 	groups = '\n'.join(grouping_defs)
 	ints = '\n    '.join('self.i_%s = 0' % s for s in integers)
 	bools = '\n    '.join('self.b_%s = False' % s for s in booleans)
-	strs = '\n    '.join('self.s_%s = String("")' % s for s in strings)
+	strs = '\n    '.join('self.s_%s = _String("")' % s for s in strings)
 	defs = '\n\n  '.join(routine_defs)
 
 	external_funs = []
