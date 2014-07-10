@@ -54,7 +54,12 @@ class TestCase(unittest.TestCase):
 			s_attrs = test[2] if len(test) > 2 else {}
 			p_attrs = test[3] if len(test) > 3 else {}
 
-			output, program = fun(string)
+			try:
+				output, program = fun(string)
+			except Exception as e:
+				print msg("Running routine '%s' failed: %s" % (routine, e))
+				raise
+
 			self.assertEqual(str(output), expected, msg(
 					"Wrong output for '%s': Expected '%s', got '%s'." % (string, expected,
 					output)))
