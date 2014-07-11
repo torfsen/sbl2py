@@ -513,6 +513,16 @@ else:
     s.cursor += 1
 """))
 
+CMD_TRUE = Suppress(TRUE)
+CMD_TRUE.setParseAction(code("""
+r = True
+"""))
+
+CMD_FALSE = Suppress(FALSE)
+CMD_FALSE.setParseAction(code("""
+r = False
+"""))
+
 and_action = code("""
 <v> = s.cursor
 <t0>
@@ -564,7 +574,7 @@ str_cmd_operand = (int_cmd | str_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
 		CMD_HOP | CMD_NEXT | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
 		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
 		CMD_ATLIMIT | CMD_SETLIMIT | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET |
-		CMD_ROUTINE | CMD_GROUPING | CMD_NON | TRUE | FALSE )
+		CMD_ROUTINE | CMD_GROUPING | CMD_NON | CMD_TRUE | CMD_FALSE )
 c << operatorPrecedence(
 	str_cmd_operand,
 	[
@@ -614,7 +624,7 @@ program = Forward()
 program << (ZeroOrMore(declaration | routine_def | grouping_def |
 		Group(BACKWARDMODE + para_group(program)) | str_escapes | str_def) +
 		StringEnd())
-
+program.ignore(cStyleComment | dblSlashComment)
 
 MODULE_TEMPLATE = """
 class _String(object):

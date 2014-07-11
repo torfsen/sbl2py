@@ -380,7 +380,6 @@ class TestSbl2Py(TestCase):
 			)
 		)
 
-
 	def test_routine_call(self):
 		self.assertSnowball(
 			"""
@@ -406,7 +405,32 @@ class TestSbl2Py(TestCase):
 				('g', 'g', {'cursor':0}),
 			)
 		)
+		self.assertSnowball(
+			"""
+			groupings (g)
+			define g 'f'
+			define check as non-g
+			""",
+			(
+				('f', 'f', {'cursor':0}),
+				('g', 'g', {'cursor':1}),
+			)
+		)
 
+	def test_comments(self):
+		self.assertSnowball(
+			"""
+			define /* comment */ check as ( // comment
+			  /* multi-
+			     line
+			     comment */ 'a' // comment
+			)
+			""",
+			(
+				('a', 'a', {'cursor':1}),
+				('b', 'b', {'cursor':0}),
+			)
+		)
 
 
 if __name__ == '__main__':
