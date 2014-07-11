@@ -394,6 +394,20 @@ class TestSbl2Py(TestCase):
 			)
 		)
 
+	def test_grouping_check(self):
+		self.assertSnowball(
+			"""
+			groupings (g)
+			define g 'f'
+			define check as g
+			""",
+			(
+				('f', 'f', {'cursor':1}),
+				('g', 'g', {'cursor':0}),
+			)
+		)
+
+
 
 if __name__ == '__main__':
 	import unittest

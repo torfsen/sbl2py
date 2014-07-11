@@ -503,6 +503,16 @@ CMD_ROUTINE.setParseAction(code("""
 r = self.r_<t0>(s)
 """))
 
+CMD_GROUPING = grouping_ref.copy()
+CMD_GROUPING.setParseAction(code("""
+if s.cursor == s.limit:
+  r = False
+else:
+  r = s.chars[s.cursor] in _g_<t0>
+  if r:
+    s.cursor += 1
+"""))
+
 and_action = code("""
 <v> = s.cursor
 <t0>
@@ -537,7 +547,7 @@ str_cmd_operand = (int_cmd | str_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
 		CMD_HOP | CMD_NEXT | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
 		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
 		CMD_ATLIMIT | CMD_SETLIMIT | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET |
-		CMD_ROUTINE | grouping_ref | CMD_NON | TRUE | FALSE | '?')
+		CMD_ROUTINE | CMD_GROUPING | CMD_NON | TRUE | FALSE | '?')
 c << operatorPrecedence(
 	str_cmd_operand,
 	[
