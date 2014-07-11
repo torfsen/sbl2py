@@ -542,26 +542,35 @@ def make_chain(tokens):
 		chain = tokens[0] + "\nif r:\n" + prefix_lines(make_chain(tokens[1:]), '  ')
 	return chain
 
+
+unary_actions = {
+	'not':not_action,
+	'test':test_action,
+	'try':try_action,
+	'do':do_action,
+	'fail':fail_action,
+	'goto':goto_action,
+	'gopast':gopast_action,
+	'repeat':repeat_action,
+}
+
+def unary_action(tokens):
+	tokens = extract(tokens, lambda x: isinstance(x, basestring))
+	return unary_actions[tokens[0]](tokens[1:])
+
+
 str_cmd_operand = (int_cmd | str_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
 		CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE | CMD_DELETE |
 		CMD_HOP | CMD_NEXT | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
 		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
 		CMD_ATLIMIT | CMD_SETLIMIT | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET |
-		CMD_ROUTINE | CMD_GROUPING | CMD_NON | TRUE | FALSE | '?')
+		CMD_ROUTINE | CMD_GROUPING | CMD_NON | TRUE | FALSE )
 c << operatorPrecedence(
 	str_cmd_operand,
 	[
 		(Suppress(AND), 2, opAssoc.LEFT, and_action),
 		(Suppress(OR), 2, opAssoc.LEFT, or_action),
-		(Suppress(NOT), 1, opAssoc.RIGHT, not_action),
-		(Suppress(TEST), 1, opAssoc.RIGHT, test_action),
-		(Suppress(TRY), 1, opAssoc.RIGHT, try_action),
-		(Suppress(DO), 1, opAssoc.RIGHT, do_action),
-		(Suppress(FAIL), 1, opAssoc.RIGHT, fail_action),
-		(Suppress(GOTO), 1, opAssoc.RIGHT, goto_action),
-		(Suppress(GOPAST), 1, opAssoc.RIGHT, gopast_action),
-		(Suppress(REPEAT), 1, opAssoc.RIGHT, repeat_action),
-		(Suppress(REVERSE), 1, opAssoc.RIGHT), # FIXME: Add action
+		(NOT | TEST | TRY | DO | FAIL | GOTO | GOPAST | REPEAT, 1, opAssoc.RIGHT, unary_action),
 		(Empty(), 2, opAssoc.LEFT, lambda t: make_chain(t[0])), # Concatenation without operator
 	]
 )
