@@ -223,8 +223,8 @@ class TestSbl2Py(TestCase):
 			define check as ('f' [try 'o'] <- 'u')
 			""",
 			(
-				('foo', 'fuo'),
-				('faa', 'fuaa'),
+				('foo', 'fuo', {'cursor':2, 'limit':3}),
+				('faa', 'fuaa', {'cursor':2, 'limit':4}),
 			)
 		)
 
@@ -261,18 +261,18 @@ class TestSbl2Py(TestCase):
 	def test_insert(self):
 		self.assertSnowball(
 			"""
-			define check as (['foo'] insert 'bar')
+			define check as ('foo' insert 'bar')
 			""",
 			(
-				('fooqux', 'foobarqux', {'cursor':6}),
+				('fooqux', 'foobarqux', {'cursor':6, 'limit':9}),
 			)
 		)
 		self.assertSnowball(
 			"""
-			define check as (['foo'] <+ 'bar')
+			define check as ('foo' <+ 'bar')
 			""",
 			(
-				('fooqux', 'foobarqux', {'cursor':6}),
+				('fooqux', 'foobarqux', {'cursor':6, 'limit':9}),
 			)
 		)
 		self.assertSnowball(
@@ -281,7 +281,7 @@ class TestSbl2Py(TestCase):
 			define check as (['foo'] -> s insert s)
 			""",
 			(
-				('foo', 'foofoo', {'cursor':6}),
+				('foo', 'foofoo', {'cursor':6, 'limit':6}),
 			)
 		)
 		self.assertSnowball(
@@ -290,17 +290,17 @@ class TestSbl2Py(TestCase):
 			define check as (['foo'] -> s <+ s)
 			""",
 			(
-				('foo', 'foofoo', {'cursor':6}),
+				('foo', 'foofoo', {'cursor':6, 'limit':6}),
 			)
 		)
 
 	def test_attach(self):
 		self.assertSnowball(
 			"""
-			define check as (['foo'] attach 'bar')
+			define check as ('foo' attach 'bar')
 			""",
 			(
-				('fooqux', 'foobarqux', {'cursor':3}),
+				('fooqux', 'foobarqux', {'cursor':3, 'limit':9}),
 			)
 		)
 

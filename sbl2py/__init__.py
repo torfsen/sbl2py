@@ -770,11 +770,11 @@ class _String(object):
   def insert(self, value):
     self.attach(value)
     self.cursor += len(value)
-    self.limit += len(value)
     return True
 
   def attach(self, value):
     self.chars[self.cursor:self.cursor] = value
+    self.limit += len(value)
     return True
 
   def set_chars(self, value):
