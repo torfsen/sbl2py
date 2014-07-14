@@ -432,6 +432,30 @@ class TestSbl2Py(TestCase):
 			)
 		)
 
+	def test_substring_among(self):
+		self.assertSnowball(
+			"""
+			define check as among ('f' 'foo' 'fo')
+			""",
+			(
+				('f', 'f', {'cursor':1}),
+				('fo', 'fo', {'cursor':2}),
+				('foo', 'foo', {'cursor':3}),
+				('x', 'x', {'cursor':0}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			define check as (substring next among ('f' 'bo' (<+ 'x') 'b' 'fo' (<+ 'y')))
+			""",
+			(
+				('fz', 'fzx'),
+				('foz', 'fozy'),
+				('bz', 'bzy'),
+				('boz', 'bozx'),
+			)
+		)
+
 
 if __name__ == '__main__':
 	import unittest

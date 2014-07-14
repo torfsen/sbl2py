@@ -272,6 +272,21 @@ def debug_parse_action(f):
 # Variable index for unique local variables
 var_index = 0
 
+def insert_unique_vars(s):
+	"""
+	Replace placeholders in pseudo code by unique variable names.
+
+	Patterns of the form ``<v\d*>`` in the string ``s`` are replaced
+	with unique identifiers.
+	"""
+	global var_index
+	for v in set(re.findall(r"<v\d*>", s)):
+		unique = "var%d" % var_index
+		var_index += 1
+		s = s.replace(v, unique)
+	return s
+
+
 def code(s):
 	"""
 	Create a parse action that produces Python code.
@@ -284,14 +299,9 @@ def code(s):
 	takes a list of tokens and inserts them into the pseudo code. The ``i``-th
 	token replaces the string ``<i>``. Indentation is preserved.
 	"""
-	global var_index
 
 	s = remove_empty_lines(s)
-
-	for v in set(re.findall(r"<v\d*>", s)):
-		unique = "var%d" % var_index
-		var_index += 1
-		s = s.replace(v, unique)
+	s = insert_unique_vars(s)
 
 	def action(tokens):
 		tokens = extract(tokens, lambda x: isinstance(x, basestring))
@@ -453,9 +463,6 @@ if r:
   s.limit = len(s) - <v2>
 """))
 
-CMD_AMONG = Group(AMONG + para_group(ZeroOrMore((str_literal +
-		Optional(routine_ref)) + para_group(c))))
-
 CMD_SET = Suppress(SET) + boolean_ref
 CMD_SET.setParseAction(code("""
 <t0> = True
@@ -523,6 +530,58 @@ CMD_FALSE.setParseAction(code("""
 r = False
 """))
 
+found_substring = False
+among_vars = []
+
+def generate_substring_code():
+	index = len(among_vars)
+	result = """
+a%d = None
+<v0> = s.cursor
+r = False
+for <v1>, <v2> in _a_%d:
+  if s.startswith(<v1>):
+    a%d = <v2>
+    r = True
+    break
+  else:
+    s.cursor = <v0>
+""" % (index, index, index)
+	return insert_unique_vars(result)
+
+def cmd_substring_action(tokens):
+	global found_substring
+	found_substring = True
+	return generate_substring_code()
+
+CMD_SUBSTRING = Suppress(SUBSTRING)
+CMD_SUBSTRING.setParseAction(cmd_substring_action)
+
+def cmd_among_action(tokens):
+	global found_substring, among_vars
+	result = []
+	prefix = ''
+	if not found_substring:
+		result.append(generate_substring_code())
+		result.append('if r:')
+		prefix = '  '
+	found_substring = False
+	strings = []
+	for index, item in enumerate(tokens):
+		strings.extend((string[1:-1], index) for string in item[0])
+	strings.sort(cmp=lambda x, y: len(y[0]) - len(x[0])) # Sort by decreasing length
+	commands = (item[1] if len(item) > 1 else 'r = True' for item in tokens)
+	among_index = len(among_vars)
+	among_vars.append(repr(strings))
+	for index, command in enumerate(commands):
+		result.append(prefix_lines('if a%d == %d:\n' % (among_index, index) + prefix_lines(command, '  '), prefix))
+	return '\n'.join(result)
+
+AMONG_ARG = Forward()
+CMD_AMONG = Suppress(AMONG + '(')  + OneOrMore(AMONG_ARG) + Suppress(')')
+CMD_AMONG.setParseAction(cmd_among_action)
+
+
 and_action = code("""
 <v> = s.cursor
 <t0>
@@ -573,7 +632,7 @@ str_cmd_operand = (int_cmd | str_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
 		CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE | CMD_DELETE |
 		CMD_HOP | CMD_NEXT | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
 		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
-		CMD_ATLIMIT | CMD_SETLIMIT | SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET |
+		CMD_ATLIMIT | CMD_SETLIMIT | CMD_SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET |
 		CMD_ROUTINE | CMD_GROUPING | CMD_NON | CMD_TRUE | CMD_FALSE )
 c << operatorPrecedence(
 	str_cmd_operand,
@@ -584,6 +643,8 @@ c << operatorPrecedence(
 		(Empty(), 2, opAssoc.LEFT, lambda t: make_chain(t[0])), # Concatenation without operator
 	]
 )
+
+AMONG_ARG << Group(Group(OneOrMore(str_literal)) + Optional(Suppress('(') + c + Suppress(')')))
 
 # FIXME: Add ``backwards`` sections
 
@@ -704,6 +765,8 @@ class _String(object):
 
 %(groupings)s
 
+%(amongs)s
+
 class _Program(object):
   def __init__(self):
     self.left = None
@@ -745,7 +808,7 @@ def reset():
 	"""
 	Reset parser state.
 	"""
-	global strings, integers, externals, booleans, routines, groupings, grouping_defs, routine_defs, var_index
+	global strings, integers, externals, booleans, routines, groupings, grouping_defs, routine_defs, var_index, found_substring, among_vars
 	strings[:] = []
 	integers[:] = []
 	externals[:] = []
@@ -754,6 +817,8 @@ def reset():
 	grouping_defs[:] = []
 	routine_defs[:] = []
 	var_index = 0
+	found_substring = False
+	among_vars[:] = []
 
 
 def translate_string(code, testing=False):
@@ -768,6 +833,7 @@ def translate_string(code, testing=False):
 	py_code = program.parseString(code)
 
 	groups = '\n'.join(grouping_defs)
+	amongs = '\n'.join('_a_%d = %s' % (i, c) for i, c in enumerate(among_vars))
 	ints = '\n    '.join('self.i_%s = 0' % s for s in integers)
 	bools = '\n    '.join('self.b_%s = False' % s for s in booleans)
 	strs = '\n    '.join('self.s_%s = _String("")' % s for s in strings)
@@ -781,6 +847,7 @@ def translate_string(code, testing=False):
 
 	return MODULE_TEMPLATE % {
 		'groupings':groups,
+		'amongs':amongs,
 		'integers':ints,
 		'booleans':bools,
 		'strings':strs,
