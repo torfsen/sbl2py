@@ -413,7 +413,9 @@ r = True
 
 backwards_action = make_pseudo_code_action("""
 # Begin of backwards mode
+s.cursor, s.limit = s.limit, s.cursor
 <t0>
+s.cursor, s.limit = s.limit, s.cursor
 # End of backwards mode
 """)
 
@@ -495,14 +497,14 @@ r = (s.cursor == <t0>)
 
 CMD_SETLIMIT = Suppress(SETLIMIT) + c + Suppress(FOR) + c
 CMD_SETLIMIT.setParseAction(make_pseudo_code_action("""
-<v1> = s.cursor
-<v2> = len(s) - s.limit
+<v0> = s.cursor
+<v1> = len(s) - s.limit
 <t0>
 if r:
   s.limit = s.cursor
-  s.cursor = <v1>
+  s.cursor = <v0>
   <t1>
-  s.limit = len(s) - <v2>
+  s.limit = len(s) - <v1>
 """))
 
 CMD_SET = Suppress(SET) + boolean_ref
