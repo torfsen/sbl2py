@@ -762,11 +762,6 @@ class _String(object):
   def __len__(self):
     return len(self.chars)
 
-  def assign(self, value):
-    self.chars[self.cursor:self.limit] = value
-    self.limit = self.cursor + len(value)
-    return True
-
   def insert(self, value):
     self.attach(value)
     self.cursor += len(value)
