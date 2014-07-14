@@ -312,26 +312,30 @@ def debug_parse_action(f):
 # Variable index for unique local variables
 var_index = 0
 
-def insert_unique_vars(s):
-	"""
-	Replace placeholders in pseudo code by unique variable names.
 
-	Patterns of the form ``<v\d*>`` in the string ``s`` are replaced
-	with unique identifiers.
+def replace_placeholders(s, tokens):
+	"""
+	Replace placeholders in pseudo code.
+
+	``s`` is a string containing pseudo Python code which is prepared using the
+	following steps:
+
+	- Empty lines are removed
+
+	- Words of the form ``<v\d*>`` are replaced with unique identifiers
+
+	- Words of the form ``<t\d+>`` are replaced with the corresponding item in
+	  the ``tokens`` list. Indentation is preserved, even among multiple lines.
 	"""
 	global var_index
+
+	s = remove_empty_lines(s)
+
+	tokens = extract(tokens, lambda x: isinstance(x, basestring))
 	for v in set(re.findall(r"<v\d*>", s)):
 		unique = "var%d" % var_index
 		var_index += 1
 		s = s.replace(v, unique)
-	return s
-
-
-def replace_token_placeholders(s, tokens):
-	"""
-	Replace token placeholders of the form ``<t\d+>`` with real tokens.
-	"""
-	tokens = extract(tokens, lambda x: isinstance(x, basestring))
 
 	def sub(match):
 		return prefix_lines(tokens[int(match.group(2))], match.group(1))
@@ -339,29 +343,13 @@ def replace_token_placeholders(s, tokens):
 	return re.sub(r"( *)<t(\d+)>", sub, s)
 
 
-def code(s):
+def make_pseudo_code_action(s):
 	"""
-	Create a parse action that produces Python code.
-
-	``s`` is a string containing pseudo Python code which is prepared by
-	removing empty lines and replacing words of the form ``<v\d*>`` with unique
-	identifiers.
-
-	The resulting code is then wrapped into a parse action. The parse action
-	takes a list of tokens and inserts them into the pseudo code. The ``i``-th
-	token replaces the string ``<i>``. Indentation is preserved.
+	Create a parse action that produces Python code from pseudo code.
 	"""
+	return parse_action(lambda t: replace_placeholders(s, t))
 
-	s = remove_empty_lines(s)
-	s = insert_unique_vars(s)
-
-	@parse_action
-	def action(tokens):
-		return replace_token_placeholders(s, tokens)
-
-	return action
-
-not_action = code("""
+not_action = make_pseudo_code_action("""
 <v> = s.cursor
 <t0>
 if not r:
@@ -369,13 +357,13 @@ if not r:
 r = not r
 """)
 
-test_action = code("""
+test_action = make_pseudo_code_action("""
 <v> = s.cursor
 <t0>
 s.cursor = <v>
 """)
 
-try_action = code("""
+try_action = make_pseudo_code_action("""
 <v> = s.cursor
 <t0>
 if not r:
@@ -383,19 +371,19 @@ if not r:
   s.cursor = <v>
 """)
 
-do_action = code("""
+do_action = make_pseudo_code_action("""
 <v> = s.cursor
 <t0>
 s.cursor = <v>
 r = True
 """)
 
-fail_action = code("""
+fail_action = make_pseudo_code_action("""
 <t0>
 r = False
 """)
 
-goto_action = code("""
+goto_action = make_pseudo_code_action("""
 while True:
   <v> = s.cursor
   <t0>
@@ -405,7 +393,7 @@ while True:
   s.cursor += 1
 """)
 
-gopast_action = code("""
+gopast_action = make_pseudo_code_action("""
 while True:
   <t0>
   if r or s.cursor == s.limit:
@@ -413,7 +401,7 @@ while True:
   s.cursor += 1
 """)
 
-repeat_action = code("""
+repeat_action = make_pseudo_code_action("""
 while True:
   <v> = s.cursor
   <t0>
@@ -423,20 +411,20 @@ while True:
 r = True
 """)
 
-backwards_action = code("""
+backwards_action = make_pseudo_code_action("""
 # Begin of backwards mode
 <t0>
 # End of backwards mode
 """)
 
 CMD_LOOP = Suppress(LOOP) + expr + c
-CMD_LOOP.setParseAction(code("""
+CMD_LOOP.setParseAction(make_pseudo_code_action("""
 for <v> in xrange(<t0>):
   <t1>
 """))
 
 CMD_ATLEAST = Suppress(ATLEAST) + expr + c
-CMD_ATLEAST.setParseAction(code("""
+CMD_ATLEAST.setParseAction(make_pseudo_code_action("""
 for <v> in xrange(<t0>):
   <t1>
 while True:
@@ -449,64 +437,64 @@ r = True
 """))
 
 CMD_INSERT = str_fun(INSERT | '<+')
-CMD_INSERT.setParseAction(code("""
+CMD_INSERT.setParseAction(make_pseudo_code_action("""
 r = s.insert(<t0>)
 """))
 
 CMD_ATTACH = str_fun(ATTACH)
-CMD_ATTACH.setParseAction(code("""
+CMD_ATTACH.setParseAction(make_pseudo_code_action("""
 r = s.attach(<t0>)
 """))
 
 CMD_REPLACE_SLICE = str_fun('<-')
-CMD_REPLACE_SLICE.setParseAction(code("""
+CMD_REPLACE_SLICE.setParseAction(make_pseudo_code_action("""
 r = s.set_range(<t0>, self.left, self.right)
 """))
 
 CMD_EXPORT_SLICE = Suppress('->') + str_ref
-CMD_EXPORT_SLICE.setParseAction(code("""
+CMD_EXPORT_SLICE.setParseAction(make_pseudo_code_action("""
 r = <t0>.set_chars(s.get_range(self.left, self.right))
 """))
 
 CMD_HOP = Suppress(HOP) + expr
-CMD_HOP.setParseAction(code("""
+CMD_HOP.setParseAction(make_pseudo_code_action("""
 r = s.hop(<t0>)
 """))
 
 CMD_NEXT = Suppress(NEXT)
-CMD_NEXT.setParseAction(code("""
+CMD_NEXT.setParseAction(make_pseudo_code_action("""
 r = s.hop(1)
 """))
 
 
 CMD_SET_LEFT_MARK = Literal('[')
-CMD_SET_LEFT_MARK.setParseAction(code("""
+CMD_SET_LEFT_MARK.setParseAction(make_pseudo_code_action("""
 self.left = s.cursor
 """))
 
 CMD_SET_RIGHT_MARK = Literal(']')
-CMD_SET_RIGHT_MARK.setParseAction(code("""
+CMD_SET_RIGHT_MARK.setParseAction(make_pseudo_code_action("""
 self.right = s.cursor
 """))
 
 CMD_SETMARK = Suppress(SETMARK) + int_ref
-CMD_SETMARK.setParseAction(code("""
+CMD_SETMARK.setParseAction(make_pseudo_code_action("""
 <t0> = s.cursor
 r = True
 """))
 
 CMD_TOMARK = Suppress(TOMARK) + expr
-CMD_TOMARK.setParseAction(code("""
+CMD_TOMARK.setParseAction(make_pseudo_code_action("""
 r = s.tomark(<t0>)
 """))
 
 CMD_ATMARK = Suppress(ATMARK) + expr
-CMD_ATMARK.setParseAction(code("""
+CMD_ATMARK.setParseAction(make_pseudo_code_action("""
 r = (s.cursor == <t0>)
 """))
 
 CMD_SETLIMIT = Suppress(SETLIMIT) + c + Suppress(FOR) + c
-CMD_SETLIMIT.setParseAction(code("""
+CMD_SETLIMIT.setParseAction(make_pseudo_code_action("""
 <v1> = s.cursor
 <v2> = len(s) - s.limit
 <t0>
@@ -518,19 +506,19 @@ if r:
 """))
 
 CMD_SET = Suppress(SET) + boolean_ref
-CMD_SET.setParseAction(code("""
+CMD_SET.setParseAction(make_pseudo_code_action("""
 <t0> = True
 r = True
 """))
 
 CMD_UNSET = Suppress(UNSET) + boolean_ref
-CMD_UNSET.setParseAction(code("""
+CMD_UNSET.setParseAction(make_pseudo_code_action("""
 <t0> = False
 r = True
 """))
 
 CMD_NON = Suppress(NON + Optional('-')) + grouping_ref
-CMD_NON.setParseAction(code("""
+CMD_NON.setParseAction(make_pseudo_code_action("""
 if s.cursor == s.limit:
   r = False
 else:
@@ -540,32 +528,32 @@ else:
 """))
 
 CMD_DELETE = Suppress(DELETE)
-CMD_DELETE.setParseAction(code("""
+CMD_DELETE.setParseAction(make_pseudo_code_action("""
 r = s.set_range('', self.left, self.right)
 """))
 
 CMD_ATLIMIT = Suppress(ATLIMIT)
-CMD_ATLIMIT.setParseAction(code("""
+CMD_ATLIMIT.setParseAction(make_pseudo_code_action("""
 r = (s.cursor == s.limit)
 """))
 
 CMD_TOLIMIT = Suppress(TOLIMIT)
-CMD_TOLIMIT.setParseAction(code("""
+CMD_TOLIMIT.setParseAction(make_pseudo_code_action("""
 r = s.tolimit()
 """))
 
 CMD_STARTSWITH = string.copy()
-CMD_STARTSWITH.setParseAction(code("""
+CMD_STARTSWITH.setParseAction(make_pseudo_code_action("""
 r = s.startswith(<t0>)
 """))
 
 CMD_ROUTINE = routine_ref.copy()
-CMD_ROUTINE.setParseAction(code("""
+CMD_ROUTINE.setParseAction(make_pseudo_code_action("""
 r = self.r_<t0>(s)
 """))
 
 CMD_GROUPING = grouping_ref.copy()
-CMD_GROUPING.setParseAction(code("""
+CMD_GROUPING.setParseAction(make_pseudo_code_action("""
 if s.cursor == s.limit:
   r = False
 else:
@@ -575,17 +563,17 @@ else:
 """))
 
 CMD_TRUE = Suppress(TRUE)
-CMD_TRUE.setParseAction(code("""
+CMD_TRUE.setParseAction(make_pseudo_code_action("""
 r = True
 """))
 
 CMD_FALSE = Suppress(FALSE)
-CMD_FALSE.setParseAction(code("""
+CMD_FALSE.setParseAction(make_pseudo_code_action("""
 r = False
 """))
 
 CMD_BOOLEAN = boolean_ref.copy()
-CMD_BOOLEAN.setParseAction(code("""
+CMD_BOOLEAN.setParseAction(make_pseudo_code_action("""
 r = <t0>
 """))
 
@@ -606,7 +594,7 @@ for <v1>, <v2> in _a_%d:
   else:
     s.cursor = <v0>
 """ % (index, index, index)
-	return insert_unique_vars(result)
+	return replace_placeholders(result, [])
 
 @parse_action
 def cmd_substring_action(tokens):
@@ -656,7 +644,7 @@ def make_if_chain_action(use_not):
 			prefix += '  '
 			lines.append(prefix + 's.cursor = <v>')
 			lines.append(prefix + '<t%d>' % t)
-		return insert_unique_vars(replace_token_placeholders('\n'.join(lines), tokens))
+		return replace_placeholders('\n'.join(lines), tokens)
 
 	return action
 
@@ -743,7 +731,7 @@ routine_def.setParseAction(routine_def_action)
 # Grouping definition
 grouping_defs = []
 grouping_def = Suppress(DEFINE) + grouping_ref + delimitedList(grouping_ref |
-		str_literal.copy().setParseAction(parse_action(lambda t: "set(%s)" % t[0]), delim=oneOf('+ -')))
+		str_literal.copy().setParseAction(parse_action(lambda t: "set(%s)" % t[0])), delim=oneOf('+ -'))
 
 @parse_action
 def grouping_def_action(tokens):
