@@ -29,11 +29,12 @@ class TestSbl2Py(TestCase):
 	def test_or(self):
 		self.assertSnowball(
 			"""
-			define check as ('foo' or 'Fo')
+			define check as ('foo' or 'Fo' or 'F')
 			""",
 			(
 				('foo', 'foo', {'cursor':3}),
 				('Fo', 'Fo', {'cursor':2}),
+				('F', 'F', {'cursor':1}),
 				('bar', 'bar', {'cursor':0}),
 			)
 		)
@@ -41,7 +42,7 @@ class TestSbl2Py(TestCase):
 	def test_and(self):
 		self.assertSnowball(
 			"""
-			define check as ('fo' and 'foo')
+			define check as ('f' and 'fo' and 'foo')
 			""",
 			(
 				('foo', 'foo', {'cursor':3}),

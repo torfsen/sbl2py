@@ -4,6 +4,8 @@
 A Snowball to Python compiler.
 """
 
+import functools
+import inspect
 import re
 import sys
 import traceback
@@ -13,6 +15,42 @@ from pyparsing import *
 from sbl2py.utils import *
 
 ParserElement.enablePackrat()
+
+
+def parse_action(f):
+	"""
+	Decorator for pyparsing parse actions to ease debugging.
+	
+	pyparsing uses trial & error to deduce the number of arguments a parse
+	action accepts. Unfortunately any ``TypeError`` raised by a parse action
+	confuses that mechanism.
+
+	This decorator replaces the trial & error mechanism with one based on
+	reflection. If the decorated function itself raises a ``TypeError`` then
+	that exception is re-raised if the wrapper is called with less arguments
+	than required. This makes sure that the actual ``TypeError`` bubbles up
+	from the call to the parse action (instead of the one caused by pyparsing's
+	trial & error).
+	"""
+	num_args = len(inspect.getargspec(f).args)
+	if num_args > 3:
+		raise ValueError('Input function must take at most 3 parameters.')
+
+	@functools.wraps(f)
+	def action(*args):
+		if len(args) < num_args:
+			if action.exc_info:
+				raise action.exc_info[0], action.exc_info[1], action.exc_info[2]
+		action.exc_info = None
+		try:
+			v = f(*args[:-(num_args + 1):-1])
+			return v
+		except TypeError as e:
+			action.exc_info = sys.exc_info()
+			raise
+	
+	action.exc = None
+	return action
 
 
 def para_group(x):
@@ -42,6 +80,7 @@ FALSE.setParseAction(replaceWith('False'))
 str_escape_chars = []
 str_defs = {}
 
+@parse_action
 def str_escapes_action(tokens):
 	str_escape_chars[:] = tokens[0]
 	str_defs["'"] = "'"
@@ -107,7 +146,7 @@ class StringLiteral(Token):
 
 # Variables and literals
 name = ~keyword + Word(alphas, alphanums + '_')
-name.setParseAction(lambda t: t[0])
+name.setParseAction(parse_action(lambda t: t[0]))
 
 
 # Parse actions that correspond to Snowball declarations (``strings (...)``,
@@ -126,6 +165,7 @@ groupings = []
 def make_declaration(kw, targets):
 	decl = Suppress(kw) + Suppress('(') + ZeroOrMore(name) + Suppress(')')
 
+	@parse_action
 	def action(tokens):
 		for target in targets:
 			target.extend(tokens)
@@ -179,7 +219,7 @@ class Reference(Token):
 
 
 def make_ref_action(prefix):
-	return lambda t: prefix + t[0]
+	return parse_action(lambda t: prefix + t[0])
 
 str_ref = Reference(strings).setParseAction(make_ref_action('self.s_'))
 grouping_ref = Reference(groupings).setParseAction(make_ref_action('_g_'))
@@ -193,11 +233,12 @@ string = str_ref | str_literal
 grouping = grouping_ref | str_literal
 
 str_ref_chars = str_ref.copy()
-str_ref_chars.setParseAction(lambda t: 'self.s_' + t[0] + '.chars')
+str_ref_chars.setParseAction(parse_action(lambda t: 'self.s_' + t[0] + '.chars'))
 
 
 # String definitions
 
+@parse_action
 def str_def_action(tokens):
 	key = tokens[0]
 	mode = tokens[1]
@@ -221,11 +262,11 @@ CURSOR.setParseAction(replaceWith('s.cursor'))
 LIMIT.setParseAction(replaceWith('s.limit'))
 SIZE.setParseAction(replaceWith('len(s)'))
 sizeof_call = Suppress(SIZEOF) + str_ref
-sizeof_call.setParseAction(lambda t: "len(%s)" % t[0])
+sizeof_call.setParseAction(parse_action(lambda t: "len(%s)" % t[0]))
 expr_operand = (MAXINT | MININT | CURSOR | LIMIT | SIZE | sizeof_call | int_ref |
 		int_literal).setName('operand')
-mult_action = lambda t: ' '.join(t[0])
-add_action = lambda t: '(' + ' '.join(t[0]) + ')'
+mult_action = parse_action(lambda t: ' '.join(t[0]))
+add_action = parse_action(lambda t: '(' + ' '.join(t[0]) + ')')
 expr = Forward()
 expr << operatorPrecedence(
 	expr_operand,
@@ -240,13 +281,13 @@ expr.setName('expression')
 # Integer commands
 def make_int_assign_cmd(op):
 	cmd = (Combine(Suppress('$') + int_ref) + Suppress(op) + expr)
-	cmd.setParseAction(lambda t: '%s %s %s\nr = True' % (t[0], op, t[1]))
+	cmd.setParseAction(parse_action(lambda t: '%s %s %s\nr = True' % (t[0], op, t[1])))
 	return cmd
 
 int_assign_cmd = MatchFirst(make_int_assign_cmd(op) for op in
 		('=', '+=', '*=', '-=', '/='))
 int_rel_cmd = Combine(Suppress('$') + int_ref) + oneOf('== > < != >= <=') + expr
-int_rel_cmd.setParseAction(lambda t: 'r = ' + ' '.join(t))
+int_rel_cmd.setParseAction(parse_action(lambda t: 'r = ' + ' '.join(t)))
 int_cmd = int_assign_cmd | int_rel_cmd
 
 
@@ -286,6 +327,18 @@ def insert_unique_vars(s):
 	return s
 
 
+def replace_token_placeholders(s, tokens):
+	"""
+	Replace token placeholders of the form ``<t\d+>`` with real tokens.
+	"""
+	tokens = extract(tokens, lambda x: isinstance(x, basestring))
+
+	def sub(match):
+		return prefix_lines(tokens[int(match.group(2))], match.group(1))
+
+	return re.sub(r"( *)<t(\d+)>", sub, s)
+
+
 def code(s):
 	"""
 	Create a parse action that produces Python code.
@@ -302,13 +355,9 @@ def code(s):
 	s = remove_empty_lines(s)
 	s = insert_unique_vars(s)
 
+	@parse_action
 	def action(tokens):
-		tokens = extract(tokens, lambda x: isinstance(x, basestring))
-
-		def sub(match):
-			return prefix_lines(tokens[int(match.group(2))], match.group(1))
-
-		return re.sub(r"( *)<t(\d+)>", sub, s)
+		return replace_token_placeholders(s, tokens)
 
 	return action
 
@@ -372,6 +421,12 @@ while True:
     s.cursor = <v>
     break
 r = True
+""")
+
+backwards_action = code("""
+# Begin of backwards mode
+<t0>
+# End of backwards mode
 """)
 
 CMD_LOOP = Suppress(LOOP) + expr + c
@@ -529,6 +584,11 @@ CMD_FALSE.setParseAction(code("""
 r = False
 """))
 
+CMD_BOOLEAN = boolean_ref.copy()
+CMD_BOOLEAN.setParseAction(code("""
+r = <t0>
+"""))
+
 found_substring = False
 among_vars = []
 
@@ -548,6 +608,7 @@ for <v1>, <v2> in _a_%d:
 """ % (index, index, index)
 	return insert_unique_vars(result)
 
+@parse_action
 def cmd_substring_action(tokens):
 	global found_substring
 	found_substring = True
@@ -556,6 +617,7 @@ def cmd_substring_action(tokens):
 CMD_SUBSTRING = Suppress(SUBSTRING)
 CMD_SUBSTRING.setParseAction(cmd_substring_action)
 
+@parse_action
 def cmd_among_action(tokens):
 	global found_substring, among_vars
 	result = []
@@ -581,25 +643,32 @@ CMD_AMONG = Suppress(AMONG + '(')  + OneOrMore(AMONG_ARG) + Suppress(')')
 CMD_AMONG.setParseAction(cmd_among_action)
 
 
-and_action = code("""
-<v> = s.cursor
-<t0>
-if r:
-  s.cursor = <v>
-  <t1>
-""")
+def make_if_chain_action(use_not):
+	not_str = 'not ' if use_not else ''
 
-or_action = code("""
-<v> = s.cursor
-<t0>
-if not r:
-  s.cursor = <v>
-  <t1>
-""")
+	@parse_action
+	def action(tokens):
+		tokens = tokens[0]
+		lines = ['<v> = s.cursor', '<t0>']
+		prefix = ''
+		for t in range(1, len(tokens)):
+			lines.append(prefix + 'if ' + not_str +'r:')
+			prefix += '  '
+			lines.append(prefix + 's.cursor = <v>')
+			lines.append(prefix + '<t%d>' % t)
+		return insert_unique_vars(replace_token_placeholders('\n'.join(lines), tokens))
+
+	return action
+
+and_action = make_if_chain_action(False)
+or_action = make_if_chain_action(True)
 
 
 def debug(*args):
 	print args
+
+def debug1(arg):
+	print arg
 
 def make_chain(tokens):
 	if not tokens:
@@ -620,8 +689,10 @@ unary_actions = {
 	'goto':goto_action,
 	'gopast':gopast_action,
 	'repeat':repeat_action,
+	'backwards':backwards_action,
 }
 
+@parse_action
 def unary_action(tokens):
 	tokens = extract(tokens, lambda x: isinstance(x, basestring))
 	return unary_actions[tokens[0]](tokens[1:])
@@ -632,13 +703,13 @@ str_cmd_operand = (int_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
 		CMD_HOP | CMD_NEXT | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
 		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
 		CMD_ATLIMIT | CMD_SETLIMIT | CMD_SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET |
-		CMD_ROUTINE | CMD_GROUPING | CMD_NON | CMD_TRUE | CMD_FALSE )
+		CMD_ROUTINE | CMD_GROUPING | CMD_NON | CMD_TRUE | CMD_FALSE | CMD_BOOLEAN )
 c << operatorPrecedence(
 	str_cmd_operand,
 	[
+		(NOT | TEST | TRY | DO | FAIL | GOTO | GOPAST | REPEAT | BACKWARDS, 1, opAssoc.RIGHT, unary_action),
 		(Suppress(AND), 2, opAssoc.LEFT, and_action),
 		(Suppress(OR), 2, opAssoc.LEFT, or_action),
-		(NOT | TEST | TRY | DO | FAIL | GOTO | GOPAST | REPEAT, 1, opAssoc.RIGHT, unary_action),
 		(Empty(), 2, opAssoc.LEFT, lambda t: make_chain(t[0])), # Concatenation without operator
 	]
 )
@@ -659,6 +730,7 @@ ROUTINE_TEMPLATE = """
     return r
 """
 
+@parse_action
 def routine_def_action(tokens):
 	routine_defs.append(ROUTINE_TEMPLATE % {
 		'name':tokens[0],
@@ -671,8 +743,9 @@ routine_def.setParseAction(routine_def_action)
 # Grouping definition
 grouping_defs = []
 grouping_def = Suppress(DEFINE) + grouping_ref + delimitedList(grouping_ref |
-		str_literal.copy().setParseAction(lambda t: "set(%s)" % t[0]), delim=oneOf('+ -'))
+		str_literal.copy().setParseAction(parse_action(lambda t: "set(%s)" % t[0]), delim=oneOf('+ -')))
 
+@parse_action
 def grouping_def_action(tokens):
 	grouping_defs.append(tokens[0] + " = " + " | ".join(tokens[1:]))
 	return []
@@ -680,10 +753,9 @@ def grouping_def_action(tokens):
 grouping_def.setParseAction(grouping_def_action)
 
 # Program
-program = Forward()
-program << (ZeroOrMore(declaration | routine_def | grouping_def |
-		Group(BACKWARDMODE + para_group(program)) | str_escapes | str_def) +
-		StringEnd())
+PROGRAM_ATOM = declaration | routine_def | grouping_def | str_escapes | str_def
+BACKWARD_SECTION = Suppress(BACKWARDMODE + "(") + ZeroOrMore(PROGRAM_ATOM) + Suppress(')')
+program = ZeroOrMore(PROGRAM_ATOM | BACKWARD_SECTION) + StringEnd()
 program.ignore(cStyleComment | dblSlashComment)
 
 MODULE_TEMPLATE = """
