@@ -456,6 +456,30 @@ class TestSbl2Py(TestCase):
 			)
 		)
 
+	def test_int_cmds(self):
+		self.assertSnowball(
+			"""
+			integers (i j)
+			define check as (
+			  $i = 1
+			  $j = i
+			  $i > 0
+			  $j *= 2
+			  $j < 3
+			  $i >= 1
+			  $i += 3
+			  $j <= 2
+			  $i /= 4
+			  $i == 1
+			  $j != 1
+			  <+ 'x'
+			)
+			""",
+			(
+				('', 'x', {}, {'i_i':1, 'i_j':2}),
+			)
+		)
+
 
 if __name__ == '__main__':
 	import unittest

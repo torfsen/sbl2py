@@ -239,20 +239,19 @@ expr.setName('expression')
 
 # Integer commands
 def make_int_assign_cmd(op):
-	cmd = (Suppress('$') + int_ref + Suppress(op) + expr)
-	cmd.setParseAction(lambda t: '%s %s %s' % (t[0], op, t[1]))
+	cmd = (Combine(Suppress('$') + int_ref) + Suppress(op) + expr)
+	cmd.setParseAction(lambda t: '%s %s %s\nr = True' % (t[0], op, t[1]))
 	return cmd
 
 int_assign_cmd = MatchFirst(make_int_assign_cmd(op) for op in
 		('=', '+=', '*=', '-=', '/='))
-int_rel_cmd = Suppress('$') + int_ref + oneOf('== > < != >= <=') + expr
-int_rel_cmd.setParseAction(lambda t: '(' + ' '.join(t) + ')')
+int_rel_cmd = Combine(Suppress('$') + int_ref) + oneOf('== > < != >= <=') + expr
+int_rel_cmd.setParseAction(lambda t: 'r = ' + ' '.join(t))
 int_cmd = int_assign_cmd | int_rel_cmd
 
 
 # String commands
 c = Forward()
-str_cmd = Group(Suppress('$') + str_ref + c)
 
 str_fun = lambda fun: Suppress(fun) + (str_literal | str_ref_chars)
 
@@ -628,7 +627,7 @@ def unary_action(tokens):
 	return unary_actions[tokens[0]](tokens[1:])
 
 
-str_cmd_operand = (int_cmd | str_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
+str_cmd_operand = (int_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
 		CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE | CMD_DELETE |
 		CMD_HOP | CMD_NEXT | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
 		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
