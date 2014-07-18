@@ -412,15 +412,14 @@ r = True
 """)
 
 backwards_action = make_pseudo_code_action("""
-# Begin of backwards mode
 <v0> = s.cursor
 <v1> = len(s) - s.limit
-s.turn_around()
+s.direction *= -1
+s.cursor, s.limit = s.limit, s.cursor
 <t0>
-s.turn_around()
+s.direction *= -1
 s.cursor = <v0>
 s.limit = len(s) - <v1>
-# End of backwards mode
 """)
 
 CMD_LOOP = Suppress(LOOP) + expr + c
@@ -715,12 +714,10 @@ c << operatorPrecedence(
 
 AMONG_ARG << Group(Group(OneOrMore(str_literal)) + Optional(Suppress('(') + c + Suppress(')')))
 
-# FIXME: Add ``backwards`` sections
 
 # Routine definition
 routine_defs = []
 routine_def = Suppress(DEFINE) + routine_ref + Suppress(AS) + c
-
 
 ROUTINE_TEMPLATE = """
   def r_%(name)s(self, s):
@@ -771,10 +768,6 @@ class _String(object):
 
   def __len__(self):
     return len(self.chars)
-
-  def turn_around(self):
-    self.direction *= -1
-    self.cursor, self.limit = self.limit, self.cursor
 
   def get_range(self, start, stop):
     if self.direction == 1:
