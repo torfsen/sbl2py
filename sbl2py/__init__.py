@@ -584,7 +584,7 @@ r = False
 
 CMD_BOOLEAN = boolean_ref.copy()
 CMD_BOOLEAN.setParseAction(make_pseudo_code_action("""
-r = <t0>
+r = self.b_<t0>
 """))
 
 found_substring = False

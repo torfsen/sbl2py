@@ -633,6 +633,23 @@ class TestSbl2Py(TestCase):
 			)
 		)
 
+	def test_bool_cmds(self):
+		self.assertSnowball(
+			"""
+			booleans (i j)
+			define check as (
+			  set i
+				unset j
+				i
+				not j
+				<+ 'x'
+			)
+			""",
+			(
+				('', 'x'),
+			)
+		)
+
 
 if __name__ == '__main__':
 	import unittest
