@@ -390,7 +390,7 @@ while True:
   if r or s.cursor == s.limit:
     s.cursor = <v>
     break
-  s.cursor += 1
+  s.cursor += s.direction
 """)
 
 gopast_action = make_pseudo_code_action("""
@@ -398,7 +398,7 @@ while True:
   <t0>
   if r or s.cursor == s.limit:
     break
-  s.cursor += 1
+  s.cursor += s.direction
 """)
 
 repeat_action = make_pseudo_code_action("""
@@ -413,9 +413,13 @@ r = True
 
 backwards_action = make_pseudo_code_action("""
 # Begin of backwards mode
-s.cursor, s.limit = s.limit, s.cursor
+<v0> = s.cursor
+<v1> = len(s) - s.limit
+s.turn_around()
 <t0>
-s.cursor, s.limit = s.limit, s.cursor
+s.turn_around()
+s.cursor = <v0>
+s.limit = len(s) - <v1>
 # End of backwards mode
 """)
 
@@ -450,7 +454,7 @@ r = s.attach(<t0>)
 
 CMD_REPLACE_SLICE = str_fun('<-')
 CMD_REPLACE_SLICE.setParseAction(make_pseudo_code_action("""
-r = s.set_range(<t0>, self.left, self.right)
+r = s.set_range(self.left, self.right, <t0>)
 """))
 
 CMD_EXPORT_SLICE = Suppress('->') + str_ref
@@ -487,7 +491,7 @@ r = True
 
 CMD_TOMARK = Suppress(TOMARK) + expr
 CMD_TOMARK.setParseAction(make_pseudo_code_action("""
-r = s.tomark(<t0>)
+r = s.to_mark(<t0>)
 """))
 
 CMD_ATMARK = Suppress(ATMARK) + expr
@@ -523,15 +527,17 @@ CMD_NON = Suppress(NON + Optional('-')) + grouping_ref
 CMD_NON.setParseAction(make_pseudo_code_action("""
 if s.cursor == s.limit:
   r = False
-else:
+elif s.direction == 1:
   r = s.chars[s.cursor] not in <t0>
-  if r:
-    s.cursor += 1
+else:
+  r = s.chars[s.cursor - 1] not in <t0>
+if r:
+  s.cursor += s.direction
 """))
 
 CMD_DELETE = Suppress(DELETE)
 CMD_DELETE.setParseAction(make_pseudo_code_action("""
-r = s.set_range('', self.left, self.right)
+r = s.set_range(self.left, self.right, '')
 """))
 
 CMD_ATLIMIT = Suppress(ATLIMIT)
@@ -541,12 +547,13 @@ r = (s.cursor == s.limit)
 
 CMD_TOLIMIT = Suppress(TOLIMIT)
 CMD_TOLIMIT.setParseAction(make_pseudo_code_action("""
-r = s.tolimit()
+s.cursor = s.limit
+r = True
 """))
 
 CMD_STARTSWITH = string.copy()
 CMD_STARTSWITH.setParseAction(make_pseudo_code_action("""
-r = s.startswith(<t0>)
+r = s.starts_with(<t0>)
 """))
 
 CMD_ROUTINE = routine_ref.copy()
@@ -558,10 +565,12 @@ CMD_GROUPING = grouping_ref.copy()
 CMD_GROUPING.setParseAction(make_pseudo_code_action("""
 if s.cursor == s.limit:
   r = False
-else:
+elif s.direction == 1:
   r = s.chars[s.cursor] in _g_<t0>
-  if r:
-    s.cursor += 1
+else:
+  r = s.chars[s.cursor - 1] in _g_<t0>
+if r:
+  s.cursor += s.direction
 """))
 
 CMD_TRUE = Suppress(TRUE)
@@ -589,7 +598,7 @@ a%d = None
 <v0> = s.cursor
 r = False
 for <v1>, <v2> in _a_%d:
-  if s.startswith(<v1>):
+  if s.starts_with(<v1>):
     a%d = <v2>
     r = True
     break
@@ -755,6 +764,7 @@ class _String(object):
     self.chars = list(s)
     self.cursor = 0
     self.limit = len(s)
+    self.direction = 1
 
   def __str__(self):
     return ''.join(self.chars)
@@ -762,66 +772,73 @@ class _String(object):
   def __len__(self):
     return len(self.chars)
 
-  def assign(self, value):
-    self.chars[self.cursor:self.limit] = value
-    self.limit = self.cursor + len(value)
-    return True
+  def turn_around(self):
+    self.direction *= -1
+    self.cursor, self.limit = self.limit, self.cursor
 
-  def insert(self, value):
-    self.attach(value)
-    self.cursor += len(value)
-    return True
+  def get_range(self, start, stop):
+    if self.direction == 1:
+      return self.chars[start:stop]
+    else:
+      n = len(self.chars)
+      return self.chars[stop:start]
 
-  def attach(self, value):
-    self.chars[self.cursor:self.cursor] = value
-    self.limit += len(value)
-    return True
-
-  def set_chars(self, value):
-    self.chars = value[:]
-    self.cursor = 0
-    self.limit = len(value)
-    return True
-
-  def get_range(self, start=None, end=None):
-    if start is None:
-      start = self.cursor
-    if end is None:
-      end = self.limit
-    return self.chars[start:end]
-
-  def set_range(self, values, start, end):
-    if start > end or end > self.cursor:
-      raise ValueError('Invalid range.')
-    self.chars[start:end] = values
-    change = len(values) - (end - start)
+  def set_range(self, start, stop, chars):
+    if self.direction == 1:
+      self.chars[start:stop] = chars
+    else:
+      self.chars[stop:start] = chars
+    change = self.direction * (len(chars) - (stop - start))
     self.cursor += change
     self.limit += change
+
+  def insert(self, chars):
+    self.chars[self.cursor:self.cursor] = chars
+    if self.direction == 1:
+      self.cursor += len(chars)
+      self.limit += len(chars)
     return True
 
-  def startswith(self, value):
-    if self.limit - self.cursor < len(value):
+  def attach(self, chars):
+    self.chars[self.cursor:self.cursor] = chars
+    if self.direction == 1:
+      self.limit += len(chars)
+    else:
+      self.cursor += len(chars)
+    return True
+
+  def set_chars(self, chars):
+    self.chars = chars
+    if self.direction == 1:
+      self.cursor = 0
+      self.limit = len(chars)
+    else:
+      self.cursor = len(chars)
+      self.limit = 0
+    return True
+
+  def starts_with(self, chars):
+    n = len(chars)
+    r = self.get_range(self.cursor, self.limit)[::self.direction][:n]
+    if not r == list(chars)[::self.direction]:
       return False
-    value = list(value)
-    if self.chars[self.cursor:self.cursor + len(value)] == value:
-      self.cursor = self.cursor + len(value)
-      return True
-    return False
+    self.cursor += n * self.direction
+    return True
 
   def hop(self, n):
-    if n < 0 or self.limit - self.cursor < n:
+    if n < 0 or len(self.get_range(self.cursor, self.limit)) < n:
       return False
-    self.cursor += n
+    self.cursor += n * self.direction
     return True
 
-  def tomark(self, i):
-    if self.cursor > i or self.limit < i:
-      return False
-    self.cursor = i
-    return True
-
-  def tolimit(self):
-    self.cursor = self.limit
+  def to_mark(self, mark):
+    if self.direction == 1:
+      if self.cursor > mark or self.limit < mark:
+        return False
+    else:
+      if self.cursor < mark or self.limit > mark:
+        return False
+    self.cursor = mark
     return True
 
 %(groupings)s
