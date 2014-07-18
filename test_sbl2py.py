@@ -9,7 +9,7 @@ from sbl2py.test import TestCase
 
 class TestSbl2Py(TestCase):
 
-	def test_startswith(self):
+	def test_starts_with(self):
 		self.assertSnowball(
 			"""
 			define check as 'foo'
@@ -23,6 +23,15 @@ class TestSbl2Py(TestCase):
 				('Foo', 'Foo', {'cursor':0}),
 				('', '', {'cursor':0}),
 				('fooo', 'fooo', {'cursor':3}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			define check as backwards ('bar' 'foo' <+ 'x')
+			""",
+			(
+				('foobar', 'xfoobar'),
+				('barbar', 'barbar'),
 			)
 		)
 
@@ -118,6 +127,15 @@ class TestSbl2Py(TestCase):
 				('foobar', 'foobar', {'cursor':3}),
 			)
 		)
+		self.assertSnowball(
+			"""
+			define check as backwards ((goto 'x') or 'foo' <+ 'y')
+			""",
+			(
+				('xofoo', 'xyofoo'),
+				('ofoo', 'oyfoo'),
+			)
+		)
 
 	def test_gopast(self):
 		self.assertSnowball(
@@ -128,6 +146,15 @@ class TestSbl2Py(TestCase):
 				('fox', 'fox', {'cursor':3}),
 				('foox', 'foox', {'cursor':4}),
 				('foobar', 'foobar', {'cursor':3}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			define check as backwards ((gopast 'x') or 'foo' <+ 'y')
+			""",
+			(
+				('xofoo', 'yxofoo'),
+				('ofoo', 'oyfoo'),
 			)
 		)
 
@@ -182,6 +209,23 @@ class TestSbl2Py(TestCase):
 				('f', 'f', {'cursor':1}),
 			)
 		)
+		self.assertSnowball(
+			"""
+			define check as backwards (hop 2 <+ 'x')
+			""",
+			(
+				('foo', 'fxoo'),
+				('f', 'f'),
+			)
+		)
+		self.assertSnowball(
+			"""
+			define check as backwards (hop -2 <+ 'x')
+			""",
+			(
+				('f', 'f'),
+			)
+		)
 
 	def test_next(self):
 		self.assertSnowball(
@@ -192,6 +236,16 @@ class TestSbl2Py(TestCase):
 				('foo', 'foo', {'cursor':1}),
 				('bar', 'bar', {'cursor':1}),
 				('', '', {'cursor':0}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			define check as backwards (next <+ 'x')
+			""",
+			(
+				('foo', 'foxo'),
+				('bar', 'baxr'),
+				('', ''),
 			)
 		)
 
@@ -227,6 +281,15 @@ class TestSbl2Py(TestCase):
 				('faa', 'fuaa', {'cursor':2, 'limit':4}),
 			)
 		)
+		self.assertSnowball(
+			"""
+			define check as backwards ('f' [try 'alo'] <- 'xyz')
+			""",
+			(
+				('galof', 'gxyzf'),
+				('gf', 'gxyzf'),
+			)
+		)
 
 	def test_move_slice(self):
 		self.assertSnowball(
@@ -240,10 +303,11 @@ class TestSbl2Py(TestCase):
 		)
 		self.assertSnowball(
 			"""
-			define check as (['foo'] <- 'bar')
+			strings (s)
+			define check as backwards (['foo'] -> s ['bar'] <- s)
 			""",
 			(
-				('foobar', 'barbar'),
+				('barfoo', 'foofoo'),
 			)
 		)
 
@@ -293,6 +357,44 @@ class TestSbl2Py(TestCase):
 				('foo', 'foofoo', {'cursor':6, 'limit':6}),
 			)
 		)
+		self.assertSnowball(
+			"""
+			integers (c l)
+			define check as backwards ('foo' insert 'bar' $c = cursor $l = limit)
+			""",
+			(
+				('quxfoo', 'quxbarfoo', {}, {'i_c':3, 'i_l':0}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			integers (c l)
+			define check as backwards ('foo' <+ 'bar' $c = cursor $l = limit)
+			""",
+			(
+				('quxfoo', 'quxbarfoo', {}, {'i_c':3, 'i_l':0}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			strings (s)
+			integers (c l)
+			define check as backwards (['foo'] -> s insert s $c = cursor $l = limit)
+			""",
+			(
+				('foo', 'foofoo', {}, {'i_c':0, 'i_l':0}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			strings (s)
+			integers (c l)
+			define check as backwards (['foo'] -> s <+ s $c = cursor $l = limit)
+			""",
+			(
+				('foo', 'foofoo', {}, {'i_c':0, 'i_l':0}),
+			)
+		)
 
 	def test_attach(self):
 		self.assertSnowball(
@@ -301,6 +403,15 @@ class TestSbl2Py(TestCase):
 			""",
 			(
 				('fooqux', 'foobarqux', {'cursor':3, 'limit':9}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			integers (c l)
+			define check as backwards ('foo' attach 'bar' $c = cursor $l = limit)
+			""",
+			(
+				('foo', 'barfoo', {}, {'i_c':3, 'i_l':0}),
 			)
 		)
 
@@ -333,6 +444,23 @@ class TestSbl2Py(TestCase):
 			(
 				('o', 'o', {'cursor':0}),
 				('x', 'x', {'cursor':1}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			define check as backwards (try 'foo' tomark 2 <+ 'x')
+			""",
+			(
+				('foo', 'foo'),
+				('foofoo', 'foxofoo'),
+			)
+		)
+		self.assertSnowball(
+			"""
+			define check as backwards (tomark -2 or <+ 'x')
+			""",
+			(
+				('o', 'ox'),
 			)
 		)
 
@@ -415,6 +543,30 @@ class TestSbl2Py(TestCase):
 			(
 				('f', 'f', {'cursor':0}),
 				('g', 'g', {'cursor':1}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			groupings (g)
+			integers (c l)
+			define g 'f'
+			define check as backwards (try g $c = cursor $l = limit)
+			""",
+			(
+				('f', 'f', {}, {'i_c':0, 'i_l':0}),
+				('g', 'g', {}, {'i_c':1, 'i_l':0}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			groupings (g)
+			integers (c l)
+			define g 'f'
+			define check as backwards (try non-g $c = cursor $l = limit)
+			""",
+			(
+				('f', 'f', {}, {'i_c':1, 'i_l':0}),
+				('g', 'g', {}, {'i_c':0, 'i_l':0}),
 			)
 		)
 
