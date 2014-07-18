@@ -71,8 +71,8 @@ class TestCase(unittest.TestCase):
 			for attr, exp_value in p_attrs.iteritems():
 				value = getattr(program, attr)
 				self.assertEqual(value, exp_value, msg(
-						"Wrong value for program attribute '%s': Expected '%s', got '%s'." %
-						(attr, exp_value, value)))
+						"Wrong value for program attribute '%s': Expected '%s', got '%s'. Input was '%s', output was '%s'." %
+						(attr, exp_value, value, string, output)))
 
 
 def _module_from_code(name, code):
