@@ -608,6 +608,48 @@ class TestSbl2Py(TestCase):
 				('boz', 'bozx'),
 			)
 		)
+		self.assertSnowball(
+			"""
+			define check as (
+			    substring among (
+			        'x' (<+ 'X')
+			        'y' (
+			            among (
+			                'z' (<+ 'Z')
+			            )
+			        )
+			    )
+			)
+			""",
+			(
+				('x', 'xX'),
+				('y', 'y'),
+				('yz', 'yzZ'),
+			)
+		)
+		self.assertSnowball(
+			"""
+			integers (c l)
+			define check as backwards (try among ('f' 'foo' 'fo') $c = cursor $l = limit)
+			""",
+			(
+				('xf', 'xf', {}, {'i_c':1, 'i_l':0}),
+				('xfo', 'xfo', {}, {'i_c':1, 'i_l':0}),
+				('xfoo', 'xfoo', {}, {'i_c':1, 'i_l':0}),
+				('x', 'x', {}, {'i_c': 1, 'i_l':0}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			define check as backwards (substring next among ('f' 'bo' (<+ 'x') 'b' 'fo' (<+ 'y')))
+			""",
+			(
+				('zf', 'xzf'),
+				('zfo', 'yzfo'),
+				('zb', 'yzb'),
+				('zbo', 'xzbo'),
+			)
+		)
 
 	def test_int_cmds(self):
 		self.assertSnowball(

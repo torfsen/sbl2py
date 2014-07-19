@@ -271,7 +271,7 @@ expr = Forward()
 expr << operatorPrecedence(
 	expr_operand,
 	[
-		('-', 1, opAssoc.RIGHT, lambda t: ''.join(t[0])),
+		('-', 1, opAssoc.RIGHT, parse_action(lambda t: ''.join(t[0]))),
 		(oneOf('* /'), 2, opAssoc.LEFT, mult_action),
 		(oneOf('+ -'), 2, opAssoc.LEFT, add_action)
 	]
@@ -292,7 +292,14 @@ int_cmd = int_assign_cmd | int_rel_cmd
 
 
 # String commands
-c = Forward()
+
+# Generating code for ``substring ... among`` on the fly (i.e. without
+# generating a full AST) requires us to distinguish between those string
+# commands that can occur between ``substring`` and ``among`` and those that
+# can't.
+
+STR_CMD_A = Forward()  # Any string command that is allowed between ``substring`` and ``among``
+STR_CMD_B = Forward()  # Any string command
 
 str_fun = lambda fun: Suppress(fun) + (str_literal | str_ref_chars)
 
@@ -331,7 +338,7 @@ def replace_placeholders(s, tokens):
 
 	s = remove_empty_lines(s)
 
-	tokens = extract(tokens, lambda x: isinstance(x, basestring))
+	tokens = extract_strings(tokens)
 	for v in set(re.findall(r"<v\d*>", s)):
 		unique = "var%d" % var_index
 		var_index += 1
@@ -422,14 +429,12 @@ s.cursor = <v0>
 s.limit = len(s) - <v1>
 """)
 
-CMD_LOOP = Suppress(LOOP) + expr + c
-CMD_LOOP.setParseAction(make_pseudo_code_action("""
+loop_action = make_pseudo_code_action("""
 for <v> in xrange(<t0>):
   <t1>
-"""))
+""")
 
-CMD_ATLEAST = Suppress(ATLEAST) + expr + c
-CMD_ATLEAST.setParseAction(make_pseudo_code_action("""
+atleast_action = make_pseudo_code_action("""
 for <v> in xrange(<t0>):
   <t1>
 while True:
@@ -439,7 +444,7 @@ while True:
     s.cursor = <v>
     break
 r = True
-"""))
+""")
 
 CMD_INSERT = str_fun(INSERT | '<+')
 CMD_INSERT.setParseAction(make_pseudo_code_action("""
@@ -498,17 +503,6 @@ CMD_ATMARK.setParseAction(make_pseudo_code_action("""
 r = (s.cursor == <t0>)
 """))
 
-CMD_SETLIMIT = Suppress(SETLIMIT) + c + Suppress(FOR) + c
-CMD_SETLIMIT.setParseAction(make_pseudo_code_action("""
-<v0> = s.cursor
-<v1> = len(s) - s.limit
-<t0>
-if r:
-  s.limit = s.cursor
-  s.cursor = <v0>
-  <t1>
-  s.limit = len(s) - <v1>
-"""))
 
 CMD_SET = Suppress(SET) + boolean_ref
 CMD_SET.setParseAction(make_pseudo_code_action("""
@@ -587,7 +581,6 @@ CMD_BOOLEAN.setParseAction(make_pseudo_code_action("""
 r = self.b_<t0>
 """))
 
-found_substring = False
 among_vars = []
 
 def generate_substring_code():
@@ -606,39 +599,40 @@ for <v1>, <v2> in _a_%d:
 """ % (index, index, index)
 	return replace_placeholders(result, [])
 
-@parse_action
-def cmd_substring_action(tokens):
-	global found_substring
-	found_substring = True
-	return generate_substring_code()
 
-CMD_SUBSTRING = Suppress(SUBSTRING)
-CMD_SUBSTRING.setParseAction(cmd_substring_action)
-
-@parse_action
-def cmd_among_action(tokens):
-	global found_substring, among_vars
-	result = []
-	prefix = ''
-	if not found_substring:
-		result.append(generate_substring_code())
-		result.append('if r:')
-		prefix = '  '
-	found_substring = False
+def generate_among_code(tokens):
+	global among_vars
 	strings = []
-	for index, item in enumerate(tokens):
-		strings.extend((string[1:-1], index) for string in item[0])
+	for index, arg in enumerate(tokens):
+		strings.extend((string[1:-1], index) for string in arg[0])
 	strings.sort(cmp=lambda x, y: len(y[0]) - len(x[0])) # Sort by decreasing length
-	commands = (item[1] if len(item) > 1 else 'r = True' for item in tokens)
+	commands = (arg[1] if len(arg) > 1 else 'r = True' for arg in tokens)
 	among_index = len(among_vars)
 	among_vars.append(repr(strings))
+	result = []
 	for index, command in enumerate(commands):
-		result.append(prefix_lines('if a%d == %d:\n' % (among_index, index) + prefix_lines(command, '  '), prefix))
+		result.append('if a%d == %d:\n' % (among_index, index) + prefix_lines(command, '  '))
 	return '\n'.join(result)
 
-AMONG_ARG = Forward()
-CMD_AMONG = Suppress(AMONG + '(')  + OneOrMore(AMONG_ARG) + Suppress(')')
-CMD_AMONG.setParseAction(cmd_among_action)
+
+@parse_action
+def make_chain(tokens):
+	tokens = extract_strings(tokens)
+	if not tokens:
+		chain = ''
+	elif len(tokens) == 1:
+		chain = tokens[0]
+	else:
+		chain = tokens[0] + "\nif r:\n" + prefix_lines(make_chain(tokens[1:]), '  ')
+	return chain
+
+@parse_action
+def cmd_substring_among_action(tokens):
+	result = []
+	result.append(generate_substring_code())
+	result.extend(tokens[0])
+	result.append(generate_among_code(tokens[1]))
+	return make_chain(result)
 
 
 def make_if_chain_action(use_not):
@@ -668,15 +662,6 @@ def debug(*args):
 def debug1(arg):
 	print arg
 
-def make_chain(tokens):
-	if not tokens:
-		chain = ''
-	elif len(tokens) == 1:
-		chain = tokens[0]
-	else:
-		chain = tokens[0] + "\nif r:\n" + prefix_lines(make_chain(tokens[1:]), '  ')
-	return chain
-
 
 unary_actions = {
 	'not':not_action,
@@ -688,36 +673,63 @@ unary_actions = {
 	'gopast':gopast_action,
 	'repeat':repeat_action,
 	'backwards':backwards_action,
+	'loop':loop_action,
+	'atleast':atleast_action,
 }
 
 @parse_action
 def unary_action(tokens):
-	tokens = extract(tokens, lambda x: isinstance(x, basestring))
+	tokens = extract_strings(tokens)
 	return unary_actions[tokens[0]](tokens[1:])
 
 
-str_cmd_operand = (int_cmd | CMD_LOOP | CMD_ATLEAST | CMD_STARTSWITH |
+concatenation_action = parse_action(lambda t: make_chain(t[0]))
+
+STR_CMD_OPERAND_A = (int_cmd | CMD_STARTSWITH |
 		CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE | CMD_DELETE |
 		CMD_HOP | CMD_NEXT | CMD_SET_LEFT_MARK | CMD_SET_RIGHT_MARK |
 		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
-		CMD_ATLIMIT | CMD_SETLIMIT | CMD_SUBSTRING | CMD_AMONG | CMD_SET | CMD_UNSET |
+		CMD_ATLIMIT | CMD_SET | CMD_UNSET |
 		CMD_ROUTINE | CMD_GROUPING | CMD_NON | CMD_TRUE | CMD_FALSE | CMD_BOOLEAN )
-c << operatorPrecedence(
-	str_cmd_operand,
-	[
-		(NOT | TEST | TRY | DO | FAIL | GOTO | GOPAST | REPEAT | BACKWARDS, 1, opAssoc.RIGHT, unary_action),
-		(Suppress(AND), 2, opAssoc.LEFT, and_action),
-		(Suppress(OR), 2, opAssoc.LEFT, or_action),
-		(Empty(), 2, opAssoc.LEFT, lambda t: make_chain(t[0])), # Concatenation without operator
-	]
-)
 
-AMONG_ARG << Group(Group(OneOrMore(str_literal)) + Optional(Suppress('(') + c + Suppress(')')))
+CMD_SUBSTRING_AMONG = Forward()
+STR_CMD_OPERAND_B = STR_CMD_OPERAND_A | CMD_SUBSTRING_AMONG
+
+def make_str_cmd_pattern(str_cmd, operands):
+	CMD_SETLIMIT = Suppress(SETLIMIT) + str_cmd + Suppress(FOR) + str_cmd
+	CMD_SETLIMIT.setParseAction(make_pseudo_code_action("""
+<v0> = s.cursor
+<v1> = len(s) - s.limit
+<t0>
+if r:
+  s.limit = s.cursor
+  s.cursor = <v0>
+  <t1>
+  s.limit = len(s) - <v1>
+	"""))
+	str_cmd << operatorPrecedence(
+		operands | CMD_SETLIMIT,
+		[
+			(NOT | TEST | TRY | DO | FAIL | GOTO | GOPAST | REPEAT | BACKWARDS | (LOOP + expr) | (ATLEAST + expr), 1, opAssoc.RIGHT, unary_action),
+			(Suppress(AND), 2, opAssoc.LEFT, and_action),
+			(Suppress(OR), 2, opAssoc.LEFT, or_action),
+			(Empty(), 2, opAssoc.LEFT, concatenation_action), # Concatenation without operator
+		]
+	)
+
+make_str_cmd_pattern(STR_CMD_A, STR_CMD_OPERAND_A)
+make_str_cmd_pattern(STR_CMD_B, STR_CMD_OPERAND_B)
+
+AMONG_ARG = Forward()
+CMD_AMONG = Suppress(AMONG + '(') + Group(OneOrMore(AMONG_ARG)) + Suppress(')')
+CMD_SUBSTRING_AMONG << Group(Optional(Suppress(SUBSTRING) + ZeroOrMore(STR_CMD_A))) + CMD_AMONG
+CMD_SUBSTRING_AMONG.setParseAction(cmd_substring_among_action)
+AMONG_ARG << Group(Group(OneOrMore(str_literal)) + Optional(Suppress('(') + STR_CMD_B + Suppress(')')))
 
 
 # Routine definition
 routine_defs = []
-routine_def = Suppress(DEFINE) + routine_ref + Suppress(AS) + c
+routine_def = Suppress(DEFINE) + routine_ref + Suppress(AS) + STR_CMD_B
 
 ROUTINE_TEMPLATE = """
   def r_%(name)s(self, s):
@@ -879,7 +891,7 @@ def reset():
 	"""
 	Reset parser state.
 	"""
-	global strings, integers, externals, booleans, routines, groupings, grouping_defs, routine_defs, var_index, found_substring, among_vars
+	global strings, integers, externals, booleans, routines, groupings, grouping_defs, routine_defs, var_index, among_vars
 	strings[:] = []
 	integers[:] = []
 	externals[:] = []
@@ -888,7 +900,6 @@ def reset():
 	grouping_defs[:] = []
 	routine_defs[:] = []
 	var_index = 0
-	found_substring = False
 	among_vars[:] = []
 
 

@@ -16,7 +16,13 @@ def prefix_lines(s, p):
 	"""
 	Prefix each line of ``s`` by ``p``.
 	"""
-	return p + ('\n' + p).join(s.split('\n'))
+	try:
+		return p + ('\n' + p).join(s.split('\n'))
+	except Exception as e:
+		import traceback
+		traceback.print_exc()
+		import pdb; pdb.set_trace()
+		raise
 
 
 def extract(seq, f):
@@ -37,3 +43,10 @@ def extract(seq, f):
 		else:
 			items.extend(extract(item, f))
 	return items
+
+
+def extract_strings(seq):
+	"""
+	Extract all strings from a possibly nested sequence.
+	"""
+	return extract(seq, lambda x: isinstance(x, basestring))
