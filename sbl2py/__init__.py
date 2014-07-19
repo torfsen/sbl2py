@@ -350,11 +350,22 @@ def replace_placeholders(s, tokens):
 	return re.sub(r"( *)<t(\d+)>", sub, s)
 
 
-def make_pseudo_code_action(s):
+def annotate_code(code, caption=''):
+	return annotate(code, caption, single='   # ', first='  ## ', middle='   # ', last='  ## ')
+
+def make_pseudo_code_action(s, caption=''):
 	"""
 	Create a parse action that produces Python code from pseudo code.
 	"""
-	return parse_action(lambda t: replace_placeholders(s, t))
+
+	@parse_action
+	def action(tokens):
+		code = replace_placeholders(s, tokens)
+		if caption:
+			code = annotate_code(code, caption)
+		return code
+
+	return action
 
 not_action = make_pseudo_code_action("""
 <v> = s.cursor
@@ -362,13 +373,13 @@ not_action = make_pseudo_code_action("""
 if not r:
   s.cursor = <v>
 r = not r
-""")
+""", 'not')
 
 test_action = make_pseudo_code_action("""
 <v> = s.cursor
 <t0>
 s.cursor = <v>
-""")
+""", 'test')
 
 try_action = make_pseudo_code_action("""
 <v> = s.cursor
@@ -376,19 +387,19 @@ try_action = make_pseudo_code_action("""
 if not r:
   r = True
   s.cursor = <v>
-""")
+""", 'try')
 
 do_action = make_pseudo_code_action("""
 <v> = s.cursor
 <t0>
 s.cursor = <v>
 r = True
-""")
+""", 'do')
 
 fail_action = make_pseudo_code_action("""
 <t0>
 r = False
-""")
+""", 'fail')
 
 goto_action = make_pseudo_code_action("""
 while True:
@@ -398,7 +409,7 @@ while True:
     s.cursor = <v>
     break
   s.cursor += s.direction
-""")
+""", 'goto')
 
 gopast_action = make_pseudo_code_action("""
 while True:
@@ -406,7 +417,7 @@ while True:
   if r or s.cursor == s.limit:
     break
   s.cursor += s.direction
-""")
+""", 'gopast')
 
 repeat_action = make_pseudo_code_action("""
 while True:
@@ -416,7 +427,7 @@ while True:
     s.cursor = <v>
     break
 r = True
-""")
+""", 'repeat')
 
 backwards_action = make_pseudo_code_action("""
 <v0> = s.cursor
@@ -427,12 +438,12 @@ s.cursor, s.limit = s.limit, s.cursor
 s.direction *= -1
 s.cursor = <v0>
 s.limit = len(s) - <v1>
-""")
+""", 'backwards')
 
 loop_action = make_pseudo_code_action("""
 for <v> in xrange(<t0>):
   <t1>
-""")
+""", 'loop')
 
 atleast_action = make_pseudo_code_action("""
 for <v> in xrange(<t0>):
@@ -444,77 +455,77 @@ while True:
     s.cursor = <v>
     break
 r = True
-""")
+""", 'atleast')
 
 CMD_INSERT = str_fun(INSERT | '<+')
 CMD_INSERT.setParseAction(make_pseudo_code_action("""
 r = s.insert(<t0>)
-"""))
+""", 'insert'))
 
 CMD_ATTACH = str_fun(ATTACH)
 CMD_ATTACH.setParseAction(make_pseudo_code_action("""
 r = s.attach(<t0>)
-"""))
+""", 'attach'))
 
 CMD_REPLACE_SLICE = str_fun('<-')
 CMD_REPLACE_SLICE.setParseAction(make_pseudo_code_action("""
 r = s.set_range(self.left, self.right, <t0>)
-"""))
+""", '<-'))
 
 CMD_EXPORT_SLICE = Suppress('->') + str_ref
 CMD_EXPORT_SLICE.setParseAction(make_pseudo_code_action("""
 r = <t0>.set_chars(s.get_range(self.left, self.right))
-"""))
+""", '->'))
 
 CMD_HOP = Suppress(HOP) + expr
 CMD_HOP.setParseAction(make_pseudo_code_action("""
 r = s.hop(<t0>)
-"""))
+""", 'hop'))
 
 CMD_NEXT = Suppress(NEXT)
 CMD_NEXT.setParseAction(make_pseudo_code_action("""
 r = s.hop(1)
-"""))
+""", 'next'))
 
 
 CMD_SET_LEFT_MARK = Literal('[')
 CMD_SET_LEFT_MARK.setParseAction(make_pseudo_code_action("""
 self.left = s.cursor
-"""))
+""", '['))
 
 CMD_SET_RIGHT_MARK = Literal(']')
 CMD_SET_RIGHT_MARK.setParseAction(make_pseudo_code_action("""
 self.right = s.cursor
-"""))
+""", ']'))
 
 CMD_SETMARK = Suppress(SETMARK) + int_ref
 CMD_SETMARK.setParseAction(make_pseudo_code_action("""
 <t0> = s.cursor
 r = True
-"""))
+""", 'setmark'))
 
 CMD_TOMARK = Suppress(TOMARK) + expr
 CMD_TOMARK.setParseAction(make_pseudo_code_action("""
 r = s.to_mark(<t0>)
-"""))
+""", 'tomark'))
 
 CMD_ATMARK = Suppress(ATMARK) + expr
 CMD_ATMARK.setParseAction(make_pseudo_code_action("""
 r = (s.cursor == <t0>)
-"""))
+""", 'atmark'))
 
 
 CMD_SET = Suppress(SET) + boolean_ref
 CMD_SET.setParseAction(make_pseudo_code_action("""
 <t0> = True
 r = True
-"""))
+""", 'set'))
 
 CMD_UNSET = Suppress(UNSET) + boolean_ref
 CMD_UNSET.setParseAction(make_pseudo_code_action("""
 <t0> = False
 r = True
-"""))
+""", 'unset'))
 
 CMD_NON = Suppress(NON + Optional('-')) + grouping_ref
 CMD_NON.setParseAction(make_pseudo_code_action("""
@@ -526,33 +537,33 @@ else:
   r = s.chars[s.cursor - 1] not in <t0>
 if r:
   s.cursor += s.direction
-"""))
+""", 'non'))
 
 CMD_DELETE = Suppress(DELETE)
 CMD_DELETE.setParseAction(make_pseudo_code_action("""
 r = s.set_range(self.left, self.right, '')
-"""))
+""", 'delete'))
 
 CMD_ATLIMIT = Suppress(ATLIMIT)
 CMD_ATLIMIT.setParseAction(make_pseudo_code_action("""
 r = (s.cursor == s.limit)
-"""))
+""", 'atlimit'))
 
 CMD_TOLIMIT = Suppress(TOLIMIT)
 CMD_TOLIMIT.setParseAction(make_pseudo_code_action("""
 s.cursor = s.limit
 r = True
-"""))
+""", 'tolimit'))
 
 CMD_STARTSWITH = string.copy()
 CMD_STARTSWITH.setParseAction(make_pseudo_code_action("""
 r = s.starts_with(<t0>)
-"""))
+""", 'startswith'))
 
 CMD_ROUTINE = routine_ref.copy()
 CMD_ROUTINE.setParseAction(make_pseudo_code_action("""
 r = self.r_<t0>(s)
-"""))
+""", 'routine call'))
 
 CMD_GROUPING = grouping_ref.copy()
 CMD_GROUPING.setParseAction(make_pseudo_code_action("""
@@ -564,24 +575,25 @@ else:
   r = s.chars[s.cursor - 1] in _g_<t0>
 if r:
   s.cursor += s.direction
-"""))
+""", 'grouping'))
 
 CMD_TRUE = Suppress(TRUE)
 CMD_TRUE.setParseAction(make_pseudo_code_action("""
 r = True
-"""))
+""", 'true'))
 
 CMD_FALSE = Suppress(FALSE)
 CMD_FALSE.setParseAction(make_pseudo_code_action("""
 r = False
-"""))
+""", 'false'))
 
 CMD_BOOLEAN = boolean_ref.copy()
 CMD_BOOLEAN.setParseAction(make_pseudo_code_action("""
 r = self.b_<t0>
-"""))
+""", 'boolean reference'))
 
 among_vars = []
+
 
 def generate_substring_code():
 	index = len(among_vars)
@@ -597,7 +609,7 @@ for <v1>, <v2> in _a_%d:
   else:
     s.cursor = <v0>
 """ % (index, index, index)
-	return replace_placeholders(result, [])
+	return annotate_code(replace_placeholders(result, []), 'substring')
 
 
 def generate_among_code(tokens):
@@ -612,7 +624,7 @@ def generate_among_code(tokens):
 	result = []
 	for index, command in enumerate(commands):
 		result.append('if a%d == %d:\n' % (among_index, index) + prefix_lines(command, '  '))
-	return '\n'.join(result)
+	return annotate_code('\n'.join(result), 'among')
 
 
 @parse_action
