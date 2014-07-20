@@ -283,11 +283,12 @@ class TestSbl2Py(TestCase):
 		)
 		self.assertSnowball(
 			"""
-			define check as backwards ('f' [try 'alo'] <- 'xyz')
+			integers (c l)
+			define check as backwards ('f' [try 'alo'] <- 'xy' $c = cursor $l = limit)
 			""",
 			(
-				('galof', 'gxyzf'),
-				('gf', 'gxyzf'),
+				('galof', 'gxyf', {}, {'i_c':1, 'i_l':0}),
+				('gf', 'gxyf', {}, {'i_c':1, 'i_l':0}),
 			)
 		)
 

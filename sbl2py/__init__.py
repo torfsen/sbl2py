@@ -812,8 +812,17 @@ class _String(object):
     else:
       self.chars[stop:start] = chars
     change = self.direction * (len(chars) - (stop - start))
-    self.cursor += change
-    self.limit += change
+    if self.direction == 1:
+      if self.cursor >= stop:
+        self.cursor += change
+      if self.limit >= stop:
+        self.limit += change
+    else:
+      if self.cursor > start:
+        self.cursor += change
+      if self.limit > start:
+        self.limit += change
+    return True
 
   def insert(self, chars):
     self.chars[self.cursor:self.cursor] = chars
