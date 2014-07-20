@@ -390,9 +390,15 @@ if not r:
 """, 'try')
 
 do_action = make_pseudo_code_action("""
-<v> = s.cursor
+if s.direction == 1:
+  <v> = s.cursor
+else:
+  <v> = len(s) - s.cursor
 <t0>
-s.cursor = <v>
+if s.direction == 1:
+  s.cursor = <v>
+else:
+  s.cursor = len(s) - <v>
 r = True
 """, 'do')
 
