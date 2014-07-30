@@ -425,12 +425,14 @@ class SetLeftNode(_PseudoCodeNode):
 	label = '['
 	code = """
 self.left = s.cursor
+r = True
 """
 
 class SetRightNode(_PseudoCodeNode):
 	label = ']'
 	code = """
 self.right = s.cursor
+r = True
 """
 
 class SetMarkNode(_PseudoCodeNode):
