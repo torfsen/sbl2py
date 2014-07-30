@@ -248,7 +248,7 @@ while True:
   if r or s.cursor == s.limit:
     s.cursor = <v>
     break
-  s.cursor += 1
+  s.cursor = <v> + 1
 """
 	backwards_code = """
 while True:
@@ -257,7 +257,7 @@ while True:
   if r or s.cursor == s.limit:
     s.cursor = <v>
     break
-  s.cursor -= 1
+  s.cursor = <v> - 1
 """
 
 class GoPastNode(_PseudoCodeNode):
