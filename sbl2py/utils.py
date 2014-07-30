@@ -4,26 +4,28 @@
 Various utilities.
 """
 
+import itertools
+import math
+import re
+
 
 def remove_empty_lines(s):
 	"""
 	Remove empty lines from a string.
 	"""
-	return '\n'.join(line for line in s.split('\n') if line)
-
+	return '\n'.join(line for line in s.splitlines() if line)
 
 def prefix_lines(s, p):
 	"""
 	Prefix each line of ``s`` by ``p``.
 	"""
 	try:
-		return p + ('\n' + p).join(s.split('\n'))
+		return p + ('\n' + p).join(s.splitlines())
 	except Exception as e:
 		import traceback
 		traceback.print_exc()
 		import pdb; pdb.set_trace()
 		raise
-
 
 def extract(seq, f):
 	"""
@@ -44,13 +46,11 @@ def extract(seq, f):
 			items.extend(extract(item, f))
 	return items
 
-
 def extract_strings(seq):
 	"""
 	Extract all strings from a possibly nested sequence.
 	"""
 	return extract(seq, lambda x: isinstance(x, basestring))
-
 
 def annotate(text, caption, prefix='', single='> ', first='\\ ', middle=' | ', last='/ '):
 	"""
@@ -65,7 +65,7 @@ def annotate(text, caption, prefix='', single='> ', first='\\ ', middle=' | ', l
 	multi-line texts, the first line is marked with ``first``, the middle lines
 	with ``middle`` and the last one with ``last``.
 	"""
-	lines = text.split('\n')
+	lines = text.splitlines()
 	lengths = [len(line) for line in lines]
 	c = max(lengths)
 	n = len(lines)
@@ -81,3 +81,22 @@ def annotate(text, caption, prefix='', single='> ', first='\\ ', middle=' | ', l
 		lines[i] = lines[i] + ' ' * (c - lengths[i]) + prefix + s
 	lines[n / 2] += caption
 	return '\n'.join(lines)
+
+def group(iterable, size):
+	"""
+	Group an iterable into tuples.
+	"""
+	it = iter(iterable)
+	while True:
+		sub_it = itertools.islice(it, size)
+		yield tuple([sub_it.next()] + list(sub_it))
+
+def add_line_numbers(text, margin="  "):
+	"""
+	Add line numbers to a text.
+	"""
+	lines = text.splitlines()
+	num_digits = math.floor(math.log10(len(lines))) + 1
+	format_str = '%%%dd%s%%s' % (num_digits, margin)
+	nums = xrange(1, len(lines) + 1)
+	return '\n'.join(format_str % (n, line) for (n, line) in zip(nums, lines))

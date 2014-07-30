@@ -11,6 +11,7 @@ import traceback
 import unittest
 
 import sbl2py
+from sbl2py.utils import add_line_numbers
 
 
 class TestCase(unittest.TestCase):
@@ -32,13 +33,13 @@ class TestCase(unittest.TestCase):
 		code = ("externals (%s)\n" % routine) + code
 
 		try:
-			pycode = sbl2py.translate_string(code, testing=True)
+			pycode = sbl2py.translate_string(code, debug=True)
 		except Exception as e:
-			print "Could not translate the following Snowball code:\n\n" + code
+			print "Could not translate the following Snowball code:\n\n" + add_line_numbers(code)
 			raise
 
 		def msg(s):
-			return s + "\n\nSnowball code:\n\n" + code + "\n\nPython code:\n\n" + pycode
+			return s + "\n\nSnowball code:\n\n" + add_line_numbers(code) + "\n\nPython code:\n\n" + add_line_numbers(pycode)
 
 		try:
 			module = _module_from_code('sbl2py_testmodule', pycode)

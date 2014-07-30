@@ -570,6 +570,41 @@ class TestSbl2Py(TestCase):
 				('g', 'g', {}, {'i_c':0, 'i_l':0}),
 			)
 		)
+		self.assertSnowball(
+			"""
+			groupings (x y z)
+			define x 'a' + 'b'
+			define y x + 'd' - 'b'
+			define z y - x
+			define check as z
+			""",
+			(
+				('d', 'd', {'cursor':1}),
+				('a', 'a', {'cursor':0}),
+			)
+		)
+		self.assertSnowball(
+			"""
+			groupings (g)
+			define g 'f'
+			define check as ('x' (g or <+ 'y'))
+			""",
+			(
+				('x', 'xy'),
+				('xf', 'xf'),
+			)
+		)
+		self.assertSnowball(
+			"""
+			groupings (g)
+			define g 'f'
+			define check as backwards ('x' (g or <+ 'y'))
+			""",
+			(
+				('x', 'yx'),
+				('fx', 'fx'),
+			)
+		)
 
 	def test_comments(self):
 		self.assertSnowball(
@@ -626,6 +661,15 @@ class TestSbl2Py(TestCase):
 				('x', 'xX'),
 				('y', 'y'),
 				('yz', 'yzZ'),
+			)
+		)
+		self.assertSnowball(
+			"""
+			define check as (test substring among ('x' (<+ 'y')))
+			"""
+			,
+			(
+				('x', 'yx'),
 			)
 		)
 		self.assertSnowball(
@@ -692,7 +736,6 @@ class TestSbl2Py(TestCase):
 				('', 'x'),
 			)
 		)
-
 
 if __name__ == '__main__':
 	import unittest
