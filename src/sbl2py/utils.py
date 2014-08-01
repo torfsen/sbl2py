@@ -4,6 +4,7 @@
 Various utilities.
 """
 
+import imp
 import itertools
 import math
 import re
@@ -100,3 +101,11 @@ def add_line_numbers(text, margin="  "):
 	format_str = '%%%dd%s%%s' % (num_digits, margin)
 	nums = xrange(1, len(lines) + 1)
 	return '\n'.join(format_str % (n, line) for (n, line) in zip(nums, lines))
+
+def module_from_code(name, code):
+	"""
+	Dynamically create Python module from code string.
+	"""
+	module = imp.new_module(name)
+	exec code in module.__dict__
+	return module
