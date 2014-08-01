@@ -275,7 +275,7 @@ class StringLiteral(Token):
 
 @parse_action
 def stringescapes_cmd_action(tokens):
-	state.stringescapes[:] = tokens[0]
+	state.stringescapes[:] = tokens[0] + tokens[1]
 	state.stringdefs["'"] = "'"
 	state.stringdefs['['] = '['
 	return []
@@ -295,7 +295,8 @@ def stringdef_cmd_action(tokens):
 STR_LITERAL = StringLiteral(state.stringescapes, state.stringdefs)
 STR_LITERAL.setParseAction(parse_action(lambda t: StringLiteralNode(t[0])))
 
-STRINGESCAPES_CMD = Suppress(STRINGESCAPES) + Word(printables, exact=2)
+CHAR = Word(printables, exact=1)
+STRINGESCAPES_CMD = Suppress(STRINGESCAPES) + CHAR + CHAR
 STRINGESCAPES_CMD.setParseAction(stringescapes_cmd_action)
 
 STRINGDEF_CMD = Suppress(STRINGDEF) + Word(printables) + Optional(HEX | DECIMAL,
