@@ -200,6 +200,13 @@ if not r:
   s.cursor = <v>
 r = not r
 """
+	backwards_code = """
+<v> = len(s) - s.cursor
+<t0>
+if not r:
+  s.cursor = len(s) - <v>
+r = not r
+"""
 
 class TestNode(_PseudoCodeNode):
 	label = 'test'
@@ -207,6 +214,11 @@ class TestNode(_PseudoCodeNode):
 <v> = s.cursor
 <t0>
 s.cursor = <v>
+"""
+	backwards_code = """
+<v> = len(s) - s.cursor
+<t0>
+s.cursor = len(s) - <v>
 """
 
 class TryNode(_PseudoCodeNode):
@@ -217,6 +229,13 @@ class TryNode(_PseudoCodeNode):
 if not r:
   r = True
   s.cursor = <v>
+"""
+	backwards_code = """
+<v> = len(s) - s.cursor
+<t0>
+if not r:
+  r = True
+  s.cursor = len(s) - <v>
 """
 
 class DoNode(_PseudoCodeNode):
@@ -254,12 +273,12 @@ while True:
 """
 	backwards_code = """
 while True:
-  <v> = s.cursor
+  <v> = len(s) - s.cursor
   <t0>
   if r or s.cursor == s.limit:
-    s.cursor = <v>
+    s.cursor = len(s) - <v>
     break
-  s.cursor = <v> - 1
+  s.cursor = len(s) - <v> - 1
 """
 
 class GoPastNode(_PseudoCodeNode):
@@ -290,6 +309,15 @@ while True:
     break
 r = True
 """
+	backwards_code = """
+while True:
+  <v> = len(s) - s.cursor
+  <t0>
+  if not r:
+    s.cursor = len(s) - <v>
+    break
+r = True
+"""
 
 class LoopNode(_PseudoCodeNode):
 	label = 'loop'
@@ -308,6 +336,17 @@ while True:
   <t1>
   if not r:
     s.cursor = <v>
+    break
+r = True
+"""
+	backwards_code = """
+for <v> in xrange(<t0>):
+  <t1>
+while True:
+  <v> = len(s) - s.cursor
+  <t1>
+  if not r:
+    s.cursor = len(s) - <v>
     break
 r = True
 """
@@ -612,6 +651,16 @@ if r:
   <t1>
   s.limit = len(s) - <v1>
 """
+	backwards_code = """
+<v0> = len(s) - s.cursor
+<v1> = s.limit
+<t0>
+if r:
+  s.limit = s.cursor
+  s.cursor = len(s) - <v0>
+  <t1>
+  s.limit = <v1>
+"""
 
 class BackwardModeNode(Node):
 	def generate_code(self, env):
@@ -665,12 +714,19 @@ class ConcatenationNode(Node):
 class _IfChainNode(Node):
 	not_str = ''
 	def generate_code(self, env):
-		lines = ['<v> = s.cursor', '<t0>']
+		if env.direction == 1:
+			lines = ['<v> = s.cursor']
+		else:
+			lines = ['<v> = len(s) - s.cursor']
+		lines.append('<t0>')
 		prefix = ''
 		for t in range(1, len(self)):
 			lines.append(prefix + 'if ' + self.not_str +'r:')
 			prefix += '  '
-			lines.append(prefix + 's.cursor = <v>')
+			if env.direction == 1:
+				lines.append(prefix + 's.cursor = <v>')
+			else:
+				lines.append(prefix + 's.cursor = len(s) - <v>')
 			lines.append(prefix + '<t%d>' % t)
 		code = '\n'.join(lines)
 		code = env.transform_pseudo_code(code, self.generate_children_codes(env))
