@@ -107,6 +107,15 @@ def module_from_code(name, code):
 	"""
 	Dynamically create Python module from code string.
 	"""
+	if isinstance(code, unicode):
+		# Remove encoding declaration if present
+		lines = code.splitlines()
+		for i in (0, 1):
+			if re.search(r"coding[:=]\s*([-\w.]+)", lines[i]) is not None:
+				lines[i] = ''
+				break
+		code = '\n'.join(lines)
+
 	module = imp.new_module(name)
 	exec code in module.__dict__
 	return module

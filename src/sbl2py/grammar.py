@@ -269,7 +269,7 @@ class StringLiteral(Token):
 			right = re.escape(self.escape_chars[1])
 			for k, v in self.replacements.iteritems():
 				s = re.sub(left + re.escape(k) + right, v, s)
-		return candidate + 1, s
+		return candidate + 1, unicode(s)
 
 
 
@@ -284,12 +284,12 @@ def stringescapes_cmd_action(tokens):
 def stringdef_cmd_action(tokens):
 	key = tokens[0]
 	mode = tokens[1]
-	value = tokens[2]
+	value = tokens[2].string
 	if mode == 'hex':
-		value = ''.join(chr(int(x, 16)) for x in value.split())
+		value = u''.join(unichr(int(x, 16)) for x in value.split())
 	elif mode == 'decimal':
-		value = ''.join(chr(int(x)) for x in value.split())
-	str_defs[key] = value
+		value = u''.join(unichr(int(x)) for x in value.split())
+	state.stringdefs[key] = value
 	return []
 
 STR_LITERAL = StringLiteral(state.stringescapes, state.stringdefs)

@@ -7,6 +7,7 @@ Tests for ``sbl2py``.
 
 # These tests are intended to be run via the nose framework.
 
+import codecs
 import glob
 import os.path
 import unittest
@@ -17,7 +18,7 @@ from nose.plugins.attrib import attr
 _module_dir = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(os.path.join(_module_dir, '..', 'src')))
 import sbl2py
-import sbl2py.utils
+from sbl2py.utils import add_line_numbers, module_from_code
 
 
 #######################################################################
@@ -48,7 +49,7 @@ def assert_snowball(code, tests, routine='check'):
 		return s + "\n\nSnowball code:\n\n" + add_line_numbers(code) + "\n\nPython code:\n\n" + add_line_numbers(pycode)
 
 	try:
-		module = sbl2py.utils.module_from_code('sbl2py_testmodule', pycode)
+		module = module_from_code('sbl2py_testmodule', pycode)
 	except SyntaxError as e:
 		print msg("Generated code is invalid: %s" % e)
 		raise
@@ -67,7 +68,7 @@ def assert_snowball(code, tests, routine='check'):
 			print msg("Running routine '%s' failed: %s" % (routine, e))
 			raise
 
-		assert str(output) == expected, msg(
+		assert unicode(output) == expected, msg(
 				"Wrong output for '%s': Expected '%s', got '%s'." % (string, expected,
 				output))
 		for attr, exp_value in s_attrs.iteritems():
@@ -810,6 +811,20 @@ def test_bool_cmds():
 	)
 
 
+def test_stringdefs():
+	assert_snowball(
+		"""
+		stringescapes {}
+		stringdef a" hex 'E4'
+		define check as '{a"}'
+		""",
+		(
+			(u'ä', u'ä', {'cursor':1}),
+			('a', 'a', {'cursor':0}),
+		)
+	)
+
+
 #######################################################################
 # TESTS USING SNOWBALL STEMMERS                                       #
 #######################################################################
@@ -818,17 +833,21 @@ def check_with_files(source_filename, input_filename, output_filename, routine='
 	"""
 	Translate a Snowball source file and check it using test cases from files.
 	"""
-	with open(source_filename, 'r') as f:
+	with codecs.open(source_filename, 'r', 'utf8') as f:
 		sbl_code = f.read()
 	py_code = sbl2py.translate_string(sbl_code)
-	module = sbl2py.utils.module_from_code('sbl2py_test_module', py_code)
+	module = module_from_code('sbl2py_test_module', py_code)
 	r = getattr(module, routine)
-	with open(input_filename, 'r') as f:
+	with codecs.open(input_filename, 'r', 'utf8') as f:
 		inputs = f.read().splitlines()
-	with open(output_filename, 'r') as f:
+	with codecs.open(output_filename, 'r', 'utf8') as f:
 		expected = f.read().splitlines()
 	for inp, exp in zip(inputs, expected):
-		outp = r(inp)
+		try:
+			outp = r(inp)
+		except Exception as e:
+			print "Could not transform %s: %s" % (repr(inp), e)
+			raise
 		assert outp == exp, 'Wrong output for "%s": Expected "%s", got "%s".' % (inp, exp, outp)
 
 

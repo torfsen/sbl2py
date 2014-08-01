@@ -10,6 +10,7 @@ import re
 
 from sbl2py.utils import remove_empty_lines, extract_strings, prefix_lines, annotate
 
+
 class Environment(object):
 	"""
 	Code generation environment.
@@ -510,7 +511,7 @@ if r:
 class DeleteNode(_PseudoCodeNode):
 	label = 'delete'
 	code = """
-r = s.set_range(self.left, self.right, '')
+r = s.set_range(self.left, self.right, u'')
 """
 
 class AtLimitNode(_PseudoCodeNode):
@@ -596,7 +597,7 @@ class CharSetNode(Node):
 		self.chars = chars
 
 	def generate_code(self, env):
-		return "set('%s')" % self.chars
+		return "set(%s)" % repr(self.chars)
 
 class SetUnionNode(_PseudoCodeNode):
 	code = '(<t0> | <t1>)'
@@ -682,7 +683,10 @@ class StringLiteralNode(Node):
 		self.string = string
 
 	def generate_code(self, env):
-		return repr(self.string)
+		c = repr(self.string)
+		if not c.startswith('u'):
+			c = 'u' + c
+		return c
 
 class IntegerLiteralNode(Node):
 
@@ -833,7 +837,7 @@ _FUNCTION_TEMPLATE = """
 def %s(s):
   s = _String(s)
   _Program().r_%s(s)
-  return str(s)
+  return unicode(s)
 """
 
 _DEBUG_FUNCTION_TEMPLATE = """
@@ -870,19 +874,21 @@ class GroupingDeclarationNode(_NoOpDeclarationNode):
 	pass
 
 
-_MODULE_TEMPLATE = """
+_MODULE_TEMPLATE = """#!/usr/bin/env python
+# vim:fileencoding=utf-8
+
 import sys
 
 class _String(object):
 
   def __init__(self, s):
-    self.chars = list(s)
+    self.chars = list(unicode(s))
     self.cursor = 0
     self.limit = len(s)
     self.direction = 1
 
-  def __str__(self):
-    return ''.join(self.chars)
+  def __unicode__(self):
+    return u''.join(self.chars)
 
   def __len__(self):
     return len(self.chars)
