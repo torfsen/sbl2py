@@ -453,17 +453,17 @@ CMD_SETLIMIT = add_node_action(Suppress(SETLIMIT) + STR_CMD + Suppress(FOR) + ST
 
 @parse_action
 def cmd_among_action(tokens):
-	# ``tokens`` is a list of arguments. Each argument is a list containing
-	# the list of string literals and the optional command.
+	common_cmd, tokens = tokens
 	strings = []
 	for index, arg in enumerate(tokens):
 		strings.extend((node.string, index) for node in arg[0])
 	strings.sort(cmp=lambda x, y: len(y[0]) - len(x[0])) # Sort by decreasing length
 	commands = [arg[1] for arg in tokens]
-	return AmongNode(strings, commands)
+	return AmongNode(strings, commands, common_cmd=common_cmd)
 
-AMONG_ARG = Group(Group(OneOrMore(STR_LITERAL)) + Optional(Suppress('(') + STR_CMD + Suppress(')'), default=None))
-CMD_AMONG = Suppress(AMONG + '(') + OneOrMore(AMONG_ARG) + Suppress(')')
+AMONG_CMD_ARG = Optional(Suppress('(') + STR_CMD + Suppress(')'), default=None)
+AMONG_ARG = Group(Group(OneOrMore(STR_LITERAL)) + AMONG_CMD_ARG)
+CMD_AMONG = Suppress(AMONG + '(') + AMONG_CMD_ARG + Group(OneOrMore(AMONG_ARG)) + Suppress(')')
 CMD_AMONG.setParseAction(cmd_among_action)
 
 STR_CMD_OPERAND = (INT_CMD | CMD_STARTSWITH | CMD_SETLIMIT |

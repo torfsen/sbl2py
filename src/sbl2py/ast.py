@@ -346,6 +346,18 @@ for <v1>, <v2> in _a_%d:
 """ % (index, index, index)
 	return env.transform_pseudo_code(code, [])
 
+def _make_if_chain(blocks):
+	"""
+	Chain code blocks together, check if ``r`` is true between them.
+	"""
+	code = [blocks[0]]
+	prefix = ''
+	for block in blocks[1:]:
+		code.append(prefix + 'if r:')
+		prefix += '  '
+		code.append(prefix_lines(block, prefix))
+	return '\n'.join(code)
+
 class SubstringNode(Node):
 	label = 'substring'
 	def generate_code(self, env):
@@ -359,18 +371,36 @@ class SubstringNode(Node):
 class AmongNode(Node):
 	label = 'among'
 
-	def __init__(self, strings, commands):
+	def __init__(self, strings, commands, common_cmd=None):
+		"""
+		Constructor.
+
+		``strings`` is a list of tuples. Each tuple contains a search string and
+		the string's command index. ``commands`` is the corresponding list of
+		command nodes.
+
+		``common_cmd`` can be a command node and represents the extended ``among``
+		syntax::
+
+		    among ( (C1) 'foo' (C2) 'bar' (C3))
+
+		Here, ``C1`` is the common command.
+		"""
 		super(AmongNode, self).__init__()
 		self.among_index = None
 		self.strings = strings
 		self.commands = commands
+		self.common_cmd = common_cmd
 
 	def generate_code(self, env):
-		code = []
+		blocks = []
 		if self.among_index is None:
 			self.among_index = env.claim_among_index()
-			code.append(_generate_substring_code(env, self.among_index))
+			blocks.append(_generate_substring_code(env, self.among_index))
 		env.module_code.append('_a_%d = %r' % (self.among_index, self.strings))
+		if self.common_cmd:
+			blocks.append(self.common_cmd.generate_code(env))
+		code = []
 		for index, command in enumerate(self.commands):
 			if command:
 				command_code = command.generate_code(env)
@@ -378,7 +408,8 @@ class AmongNode(Node):
 				command_code = 'r = True'
 			command_code = prefix_lines(command_code, '  ')
 			code.append('if a_%d == %d:\n' % (self.among_index, index) + command_code)
-		return self.annotate('\n'.join(code))
+		blocks.append('\n'.join(code))
+		return self.annotate(_make_if_chain(blocks))
 
 	def to_xml(self):
 		cmds_xml = '\n'.join(cmd.to_xml() for cmd in self.commands if cmd)
@@ -617,13 +648,7 @@ class GroupingDefinitionNode(Node):
 
 class ConcatenationNode(Node):
 	def generate_code(self, env):
-		code = [self[0].generate_code(env)]
-		prefix = ''
-		for node in self[1:]:
-			code.append(prefix + 'if r:')
-			prefix += '  '
-			code.append(prefix_lines(node.generate_code(env), prefix))
-		return '\n'.join(code)
+		return _make_if_chain(self.generate_children_codes(env))
 
 class _IfChainNode(Node):
 	not_str = ''

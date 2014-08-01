@@ -768,6 +768,15 @@ def test_substring_among():
 			('zbo', 'xzbo'),
 		)
 	)
+	assert_snowball(
+		"""
+		define check as among( (next) 'a' (<+ 'x') )
+		""",
+		(
+			('a', 'a'),
+			('ab', 'abx'),
+		)
+	)
 
 def test_int_cmds():
 	assert_snowball(
