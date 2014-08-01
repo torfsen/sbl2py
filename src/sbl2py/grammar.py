@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# vim:fileencoding=utf8
 
 """
 Snowball grammar and parser for sbl2py.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# vim:fileencoding=utf8
 
 """
 A Snowball to Python compiler.

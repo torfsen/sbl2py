@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# vim:fileencoding=utf8
 
 """
 Abstract syntax tree (AST) and code generation for sbl2py.
