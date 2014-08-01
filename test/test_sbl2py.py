@@ -856,4 +856,6 @@ def test_stemmers():
 	filenames = glob.glob(os.path.join(_module_dir, '*.sbl'))
 	for filename in filenames:
 		base = os.path.splitext(filename)[0]
-		yield check_with_files, filename, base + '_in.txt', base + '_out.txt'
+		test = lambda: check_with_files(filename, base + '_in.txt', base + '_out.txt')
+		test.description = os.path.basename(filename)
+		yield test

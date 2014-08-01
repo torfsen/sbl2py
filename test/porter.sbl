@@ -1,0 +1,166 @@
+/*
+Copyright 2001, Martin Porter
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+
+integers ( p1 p2 )
+booleans ( Y_found )
+
+routines (
+   shortv
+   R1 R2
+   Step_1a Step_1b Step_1c Step_2 Step_3 Step_4 Step_5a Step_5b
+)
+
+externals ( stem )
+
+groupings ( v v_WXY )
+
+define v        'aeiouy'
+define v_WXY    v + 'wxY'
+
+backwardmode (
+
+    define shortv as ( non-v_WXY v non-v )
+
+    define R1 as $p1 <= cursor
+    define R2 as $p2 <= cursor
+
+    define Step_1a as (
+        [substring] among (
+            'sses' (<-'ss')
+            'ies'  (<-'i')
+            'ss'   ()
+            's'    (delete)
+        )
+    )
+
+    define Step_1b as (
+        [substring] among (
+            'eed'  (R1 <-'ee')
+            'ed'
+            'ing' (
+                test gopast v  delete
+                test substring among(
+                    'at' 'bl' 'iz'
+                         (<+ 'e')
+                    'bb' 'dd' 'ff' 'gg' 'mm' 'nn' 'pp' 'rr' 'tt'
+                    // ignoring double c, h, j, k, q, v, w, and x
+                         ([next]  delete)
+                    ''   (atmark p1  test shortv  <+ 'e')
+                )
+            )
+        )
+    )
+
+    define Step_1c as (
+        ['y' or 'Y']
+        gopast v
+        <-'i'
+    )
+
+    define Step_2 as (
+        [substring] R1 among (
+            'tional'  (<-'tion')
+            'enci'    (<-'ence')
+            'anci'    (<-'ance')
+            'abli'    (<-'able')
+            'entli'   (<-'ent')
+            'eli'     (<-'e')
+            'izer' 'ization'
+                      (<-'ize')
+            'ational' 'ation' 'ator'
+                      (<-'ate')
+            'alli'    (<-'al')
+            'alism' 'aliti'
+                      (<-'al')
+            'fulness' (<-'ful')
+            'ousli' 'ousness'
+                      (<-'ous')
+            'iveness' 'iviti'
+                      (<-'ive')
+            'biliti'  (<-'ble')
+        )
+    )
+
+    define Step_3 as (
+        [substring] R1 among (
+            'alize'   (<-'al')
+            'icate' 'iciti' 'ical'
+                      (<-'ic')
+            'ative' 'ful' 'ness'
+                      (delete)
+        )
+    )
+
+    define Step_4 as (
+        [substring] R2 among (
+            'al' 'ance' 'ence' 'er' 'ic' 'able' 'ible' 'ant' 'ement'
+            'ment' 'ent' 'ou' 'ism' 'ate' 'iti' 'ous' 'ive' 'ize'
+                      (delete)
+            'ion'     ('s' or 't' delete)
+        )
+    )
+
+    define Step_5a as (
+        ['e']
+        R2 or (R1 not shortv)
+        delete
+    )
+
+    define Step_5b as (
+        ['l']
+        R2 'l'
+        delete
+    )
+)
+
+define stem as (
+
+    unset Y_found
+    do ( ['y'] <-'Y' set Y_found)
+    do repeat(goto (v ['y']) <-'Y' set Y_found)
+
+    $p1 = limit
+    $p2 = limit
+    do(
+        gopast v  gopast non-v  setmark p1
+        gopast v  gopast non-v  setmark p2
+    )
+
+    backwards (
+        do Step_1a
+        do Step_1b
+        do Step_1c
+        do Step_2
+        do Step_3
+        do Step_4
+        do Step_5a
+        do Step_5b
+    )
+
+    do(Y_found  repeat(goto (['Y']) <-'y'))
+
+)
