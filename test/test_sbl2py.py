@@ -4,15 +4,24 @@
 Tests for ``sbl2py``.
 """
 
+# These tests are intended to be run via the nose framework.
+
+import glob
 import os.path
 import unittest
 import sys
+
+from nose.plugins.attrib import attr
 
 _module_dir = os.path.dirname(__file__)
 sys.path.append(os.path.abspath(os.path.join(_module_dir, '..', 'src')))
 import sbl2py
 import sbl2py.utils
 
+
+#######################################################################
+# TESTS FOR INDIVIDUAL SNOWBALL FEATURES                              #
+#######################################################################
 
 def assert_snowball(code, tests, routine='check'):
 	"""
@@ -70,7 +79,6 @@ def assert_snowball(code, tests, routine='check'):
 			assert value == exp_value, msg(
 					"Wrong value for program attribute '%s': Expected '%s', got '%s'. Input was '%s', output was '%s'." %
 					(attr, exp_value, value, string, output))
-
 
 def test_starts_with():
 	assert_snowball(
@@ -799,3 +807,33 @@ def test_bool_cmds():
 			('', 'x'),
 		)
 	)
+
+
+#######################################################################
+# TESTS USING SNOWBALL STEMMERS                                       #
+#######################################################################
+
+def check_with_files(source_filename, input_filename, output_filename, routine='stem'):
+	"""
+	Translate a Snowball source file and check it using test cases from files.
+	"""
+	with open(source_filename, 'r') as f:
+		sbl_code = f.read()
+	py_code = sbl2py.translate_string(sbl_code)
+	module = sbl2py.utils.module_from_code('sbl2py_test_module', py_code)
+	r = getattr(module, routine)
+	with open(input_filename, 'r') as f:
+		inputs = f.read().splitlines()
+	with open(output_filename, 'r') as f:
+		expected = f.read().splitlines()
+	for inp, exp in zip(inputs, expected):
+		outp = r(inp)
+		assert outp == exp, 'Wrong output for "%s": Expected "%s", got "%s".' % (inp, exp, outp)
+
+
+@attr('slow')
+def test_stemmers():
+	filenames = glob.glob(os.path.join(_module_dir, '*.sbl'))
+	for filename in filenames:
+		base = os.path.splitext(filename)[0]
+		yield check_with_files, filename, base + '_in.txt', base + '_out.txt'
