@@ -70,17 +70,17 @@ def assert_snowball(code, tests, routine='check'):
 
 		assert unicode(output) == expected, msg(
 				"Wrong output for '%s': Expected '%s', got '%s'." % (string, expected,
-				output))
+				unicode(output)))
 		for attr, exp_value in s_attrs.iteritems():
 			value = getattr(output, attr)
 			assert value == exp_value, msg(
 					"Wrong value for string attribute '%s': Expected '%s', got '%s'. Input was '%s', output was '%s'." %
-					(attr, exp_value, value, string, output))
+					(attr, exp_value, value, string, unicode(output)))
 		for attr, exp_value in p_attrs.iteritems():
 			value = getattr(program, attr)
 			assert value == exp_value, msg(
 					"Wrong value for program attribute '%s': Expected '%s', got '%s'. Input was '%s', output was '%s'." %
-					(attr, exp_value, value, string, output))
+					(attr, exp_value, value, string, unicode(output)))
 
 def test_starts_with():
 	assert_snowball(
@@ -256,11 +256,12 @@ def test_loop():
 def test_atleast():
 	assert_snowball(
 		"""
-		define check as (atleast 2 'x')
+		define check as (atleast 2 'x' <+ 'z')
 		""",
 		(
-			('xxy', 'xxy', {'cursor':2}),
-			('xxxxy', 'xxxxy', {'cursor':4}),
+			('xxy', 'xxzy', {'cursor':3}),
+			('xxxxy', 'xxxxzy', {'cursor':5}),
+			('x', 'x'),
 		)
 	)
 

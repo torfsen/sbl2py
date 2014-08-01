@@ -324,6 +324,8 @@ class LoopNode(_PseudoCodeNode):
 	code = """
 for <v> in xrange(<t0>):
   <t1>
+  if not r:
+    break
 """
 
 class AtLeastNode(_PseudoCodeNode):
@@ -331,24 +333,30 @@ class AtLeastNode(_PseudoCodeNode):
 	code = """
 for <v> in xrange(<t0>):
   <t1>
-while True:
-  <v> = s.cursor
-  <t1>
   if not r:
-    s.cursor = <v>
     break
-r = True
+if r:
+  while True:
+    <v> = s.cursor
+    <t1>
+    if not r:
+      s.cursor = <v>
+      break
+  r = True
 """
 	backwards_code = """
 for <v> in xrange(<t0>):
   <t1>
-while True:
-  <v> = len(s) - s.cursor
-  <t1>
   if not r:
-    s.cursor = len(s) - <v>
     break
-r = True
+if r:
+  while True:
+    <v> = len(s) - s.cursor
+    <t1>
+    if not r:
+      s.cursor = len(s) - <v>
+      break
+  r = True
 """
 
 class BackwardsNode(_PseudoCodeNode):
