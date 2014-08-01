@@ -334,15 +334,12 @@ s.limit = len(s) - <v1>
 def _generate_substring_code(env, index):
 	code = """
 a_%d = None
-<v0> = s.cursor
 r = False
-for <v1>, <v2> in _a_%d:
-  if s.starts_with(<v1>):
-    a_%d = <v2>
+for <v1>, <v2>, <v3> in _a_%d:
+  if s.starts_with(<v1>) and ((not <v2>) or getattr(self, <v2>)(s)):
+    a_%d = <v3>
     r = True
     break
-  else:
-    s.cursor = <v0>
 """ % (index, index, index)
 	return env.transform_pseudo_code(code, [])
 
@@ -375,9 +372,9 @@ class AmongNode(Node):
 		"""
 		Constructor.
 
-		``strings`` is a list of tuples. Each tuple contains a search string and
-		the string's command index. ``commands`` is the corresponding list of
-		command nodes.
+		``strings`` is a list of tuples. Each tuple contains a search string, its
+		routine name (may be empty) and the string's command index. ``commands`` is
+		the corresponding list of command nodes.
 
 		``common_cmd`` can be a command node and represents the extended ``among``
 		syntax::
@@ -392,14 +389,14 @@ class AmongNode(Node):
 		self.commands = commands
 		self.common_cmd = common_cmd
 
-	def generate_code(self, env):
-		blocks = []
-		if self.among_index is None:
-			self.among_index = env.claim_among_index()
-			blocks.append(_generate_substring_code(env, self.among_index))
-		env.module_code.append('_a_%d = %r' % (self.among_index, self.strings))
-		if self.common_cmd:
-			blocks.append(self.common_cmd.generate_code(env))
+	def generate_var(self):
+		code = []
+		for s in self.strings:
+			routine = 'r_' + s[1] if s[1] else ''
+			code.append("(%r, '%s', %d)" % (s[0], routine, s[2]))
+		return '_a_%d = (' % self.among_index + ', '.join(code) + ',)'
+
+	def generate_if_chain(self, env):
 		code = []
 		for index, command in enumerate(self.commands):
 			if command:
@@ -408,7 +405,17 @@ class AmongNode(Node):
 				command_code = 'r = True'
 			command_code = prefix_lines(command_code, '  ')
 			code.append('if a_%d == %d:\n' % (self.among_index, index) + command_code)
-		blocks.append('\n'.join(code))
+		return '\n'.join(code)
+
+	def generate_code(self, env):
+		blocks = []
+		if self.among_index is None:
+			self.among_index = env.claim_among_index()
+			blocks.append(_generate_substring_code(env, self.among_index))
+		env.module_code.append(self.generate_var())
+		if self.common_cmd:
+			blocks.append(self.common_cmd.generate_code(env))
+		blocks.append(self.generate_if_chain(env))
 		return self.annotate(_make_if_chain(blocks))
 
 	def to_xml(self):
@@ -499,6 +506,11 @@ class UnsetNode(_PseudoCodeNode):
 	code = """
 <t0> = False
 r = True
+"""
+
+class EmptyCommandNode(_PseudoCodeNode):
+	code = """
+pass
 """
 
 class GroupingNode(_PseudoCodeNode):

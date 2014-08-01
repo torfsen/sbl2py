@@ -777,6 +777,19 @@ def test_substring_among():
 			('ab', 'abx'),
 		)
 	)
+	assert_snowball(
+		"""
+		routines (r)
+		define r as 'foo'
+		define check as among ('x' 'y' r (<+ 'z'))
+		""",
+		(
+			('x', 'xz'),
+			('xfoo', 'xzfoo'),
+			('y', 'y'),
+			('yfoo', 'yfooz'),
+		)
+	)
 
 def test_int_cmds():
 	assert_snowball(

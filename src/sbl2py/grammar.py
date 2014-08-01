@@ -450,25 +450,30 @@ CMD_FALSE = add_node_action(Suppress(FALSE), FalseCommandNode)
 CMD_BOOLEAN = add_node_action(BOOLEAN_REF.copy(), BooleanCommandNode)
 CMD_SUBSTRING = add_node_action(Suppress(SUBSTRING), SubstringNode)
 CMD_SETLIMIT = add_node_action(Suppress(SETLIMIT) + STR_CMD + Suppress(FOR) + STR_CMD, SetLimitNode)
+CMD_EMPTY = add_node_action(Suppress(Literal('(') + Literal(')')), EmptyCommandNode)
 
 @parse_action
 def cmd_among_action(tokens):
 	common_cmd, tokens = tokens
 	strings = []
 	for index, arg in enumerate(tokens):
-		strings.extend((node.string, index) for node in arg[0])
+		for element in arg[0]:
+			string = element[0].string
+			routine = element[1].name if element[1] else ''
+			strings.append((string, routine, index))
 	strings.sort(cmp=lambda x, y: len(y[0]) - len(x[0])) # Sort by decreasing length
 	commands = [arg[1] for arg in tokens]
 	return AmongNode(strings, commands, common_cmd=common_cmd)
 
-AMONG_CMD_ARG = Optional(Suppress('(') + STR_CMD + Suppress(')'), default=None)
-AMONG_ARG = Group(Group(OneOrMore(STR_LITERAL)) + AMONG_CMD_ARG)
+AMONG_STR = Group(STR_LITERAL + Optional(ROUTINE_REF, default=None))
+AMONG_CMD_ARG = Optional((Suppress('(') + STR_CMD + Suppress(')') | CMD_EMPTY), default=None)
+AMONG_ARG = Group(Group(OneOrMore(AMONG_STR)) + AMONG_CMD_ARG)
 CMD_AMONG = Suppress(AMONG + '(') + AMONG_CMD_ARG + Group(OneOrMore(AMONG_ARG)) + Suppress(')')
 CMD_AMONG.setParseAction(cmd_among_action)
 
 STR_CMD_OPERAND = (INT_CMD | CMD_STARTSWITH | CMD_SETLIMIT |
 		CMD_INSERT | CMD_ATTACH | CMD_REPLACE_SLICE | CMD_DELETE |
-		CMD_HOP | CMD_NEXT | CMD_SET_LEFT | CMD_SET_RIGHT |
+		CMD_HOP | CMD_NEXT | CMD_SET_LEFT | CMD_SET_RIGHT | CMD_EMPTY |
 		CMD_EXPORT_SLICE | CMD_SETMARK | CMD_TOMARK | CMD_ATMARK | CMD_TOLIMIT |
 		CMD_ATLIMIT | CMD_SET | CMD_UNSET | CMD_SUBSTRING | CMD_AMONG |
 		CMD_ROUTINE | CMD_GROUPING | CMD_NON | CMD_TRUE | CMD_FALSE | CMD_BOOLEAN )
@@ -476,6 +481,7 @@ STR_CMD_OPERAND = (INT_CMD | CMD_STARTSWITH | CMD_SETLIMIT |
 concatenation_action = make_node_action(ConcatenationNode, ungroup=True)
 and_action = make_node_action(AndNode, ungroup=True)
 or_action = make_node_action(OrNode, ungroup=True)
+
 
 STR_CMD << operatorPrecedence(
 	STR_CMD_OPERAND,
