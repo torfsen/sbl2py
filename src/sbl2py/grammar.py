@@ -450,7 +450,7 @@ CMD_TRUE = add_node_action(Suppress(TRUE), TrueCommandNode)
 CMD_FALSE = add_node_action(Suppress(FALSE), FalseCommandNode)
 CMD_BOOLEAN = add_node_action(BOOLEAN_REF.copy(), BooleanCommandNode)
 CMD_SUBSTRING = add_node_action(Suppress(SUBSTRING), SubstringNode)
-CMD_SETLIMIT = add_node_action(Suppress(SETLIMIT) + STR_CMD + Suppress(FOR) + STR_CMD, SetLimitNode)
+CMD_SETLIMIT = add_node_action(Suppress(SETLIMIT) + STR_CMD + Suppress(FOR) + Suppress('(') + STR_CMD + Suppress(')'), SetLimitNode)
 CMD_EMPTY = add_node_action(Suppress(Literal('(') + Literal(')')), EmptyCommandNode)
 
 @parse_action
