@@ -108,6 +108,33 @@ def add_node_action(pattern, *args, **kwargs):
 	return pattern
 
 
+def make_binary_op_list_action(operators, classes, ungroup=False):
+	"""
+	Make parse action for parsing token lists of binary operators and operands.
+	
+	``operators`` is a list of the operators (as strings) and ``classes`` is a
+	list of the corresponding ``Node`` subclasses.
+	"""
+	@parse_action
+	def action(tokens):
+		if ungroup:
+			tokens = tokens[0]
+		tokens = list(reversed(tokens))
+		left = tokens.pop()
+		while tokens:
+			token = tokens.pop()
+			for op, cls in zip(operators, classes):
+				if token == op:
+					node = cls()
+					break
+			node.append(left)
+			node.append(tokens.pop())
+			left = node
+		return node
+
+	return action
+
+
 #
 # KEYWORDS
 #
@@ -331,25 +358,8 @@ EXPRESSION_OPERAND = MatchFirst([
 	INT,
 ])
 
-@parse_action
-def multiplicative_action(tokens):
-	node = MultiplicationNode() if tokens[1] == '*' else DivisionNode()
-	node.append(tokens[0])
-	node.append(tokens[2])
-	if len(tokens) > 3:
-		return multplicative_action([node] + tokens[3:])
-	else:
-		return node
-
-@parse_action
-def additive_action(tokens):
-	node = AdditionNode() if tokens[1] == '+' else SubtractionNode()
-	node.append(tokens[0])
-	node.append(tokens[2])
-	if len(tokens) > 3:
-		return additive_action([node] + tokens[3:])
-	else:
-		return node
+multiplicative_action = make_binary_op_list_action(['*', '/'], [MultiplicationNode, DivisionNode])
+additive_action = make_binary_op_list_action(['+', '-'], [AdditionNode, SubtractionNode])
 
 EXPRESSION = operatorPrecedence(
 	EXPRESSION_OPERAND,
@@ -484,12 +494,13 @@ and_action = make_node_action(AndNode, ungroup=True)
 or_action = make_node_action(OrNode, ungroup=True)
 
 
+and_or_action = make_binary_op_list_action(['and', 'or'], [AndNode, OrNode], ungroup=True)
+
 STR_CMD << operatorPrecedence(
 	STR_CMD_OPERAND,
 	[
 		(UNARY_OPERATOR, 1, opAssoc.RIGHT, unary_action),
-		(Suppress(AND), 2, opAssoc.LEFT, and_action),
-		(Suppress(OR), 2, opAssoc.LEFT, or_action),
+		(AND | OR, 2, opAssoc.LEFT, and_or_action),
 		(Empty(), 2, opAssoc.LEFT, concatenation_action),
 	]
 )

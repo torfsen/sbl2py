@@ -133,6 +133,18 @@ def test_and():
 		)
 	)
 
+def test_and_or():
+	assert_snowball(
+		"""
+		define check as (('f' or 'g' and 'gg') <+ 'z')
+		""",
+		(
+			('f', 'f'),
+			('g', 'g'),
+			('gg', 'ggz'),
+		)
+	)
+
 def test_not():
 	assert_snowball(
 		"""
