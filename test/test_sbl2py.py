@@ -782,13 +782,13 @@ def test_substring_among():
 		"""
 		routines (r)
 		define r as 'foo'
-		define check as among ('x' 'y' r (<+ 'z'))
+		define check as among ('x' 'yy' r (<+ 'z') 'y' (<+ 'b'))
 		""",
 		(
 			('x', 'xz'),
 			('xfoo', 'xzfoo'),
-			('y', 'y'),
-			('yfoo', 'yzfoo'),
+			('yy', 'yby'),
+			('yyfoo', 'yyzfoo'),
 		)
 	)
 
