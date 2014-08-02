@@ -382,11 +382,14 @@ def _generate_substring_code(env, index):
 	code = """
 a_%d = None
 r = False
-for <v1>, <v2>, <v3> in _a_%d:
-  if s.starts_with(<v1>) and ((not <v2>) or getattr(self, <v2>)(s)):
-    a_%d = <v3>
-    r = True
-    break
+for <v0>, <v1>, <v2> in _a_%d:
+  if s.starts_with(<v0>):
+    <v3> = s.cursor
+    if ((not <v1>) or getattr(self, <v1>)(s)):
+      a_%d = <v2>
+      r = True
+      s.cursor = <v3>
+      break
 """ % (index, index, index)
 	return env.transform_pseudo_code(code, [])
 

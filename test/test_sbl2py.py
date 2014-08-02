@@ -788,7 +788,7 @@ def test_substring_among():
 			('x', 'xz'),
 			('xfoo', 'xzfoo'),
 			('y', 'y'),
-			('yfoo', 'yfooz'),
+			('yfoo', 'yzfoo'),
 		)
 	)
 
