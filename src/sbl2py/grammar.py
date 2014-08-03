@@ -157,8 +157,8 @@ def make_binary_op_list_action(operators, classes, ungroup=False):
 
     return action
 
-LPAREN = LPAREN
-RPAREN = RPAREN
+LPAREN = Suppress('(')
+RPAREN = Suppress(')')
 
 
 #
@@ -357,8 +357,8 @@ CHAR = Word(printables, exact=1)
 STRINGESCAPES_CMD = Suppress(STRINGESCAPES) + CHAR + CHAR
 STRINGESCAPES_CMD.setParseAction(stringescapes_cmd_action)
 
-STRINGDEF_CMD = Suppress(STRINGDEF) + Word(printables) +
-        Optional(HEX | DECIMAL, default=None) + STR_LITERAL
+STRINGDEF_CMD = (Suppress(STRINGDEF) + Word(printables) +
+                 Optional(HEX | DECIMAL, default=None) + STR_LITERAL)
 STRINGDEF_CMD.setParseAction(stringdef_cmd_action)
 
 # A sequence of characters

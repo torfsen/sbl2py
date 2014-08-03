@@ -235,14 +235,14 @@ class NotNode(_PseudoCodeNode):
 <v> = s.cursor
 <t0>
 if not r:
-  s.cursor = <v>
+    s.cursor = <v>
 r = not r
 """
     backwards_code = """
 <v> = len(s) - s.cursor
 <t0>
 if not r:
-  s.cursor = len(s) - <v>
+    s.cursor = len(s) - <v>
 r = not r
 """
 
@@ -265,15 +265,15 @@ class TryNode(_PseudoCodeNode):
 <v> = s.cursor
 <t0>
 if not r:
-  r = True
-  s.cursor = <v>
+    r = True
+    s.cursor = <v>
 """
     backwards_code = """
 <v> = len(s) - s.cursor
 <t0>
 if not r:
-  r = True
-  s.cursor = len(s) - <v>
+    r = True
+    s.cursor = len(s) - <v>
 """
 
 class DoNode(_PseudoCodeNode):
@@ -302,58 +302,58 @@ class GoToNode(_PseudoCodeNode):
     label = 'goto'
     code = """
 while True:
-  <v> = s.cursor
-  <t0>
-  if r or s.cursor == s.limit:
-    s.cursor = <v>
-    break
-  s.cursor = <v> + 1
+    <v> = s.cursor
+    <t0>
+    if r or s.cursor == s.limit:
+        s.cursor = <v>
+        break
+    s.cursor = <v> + 1
 """
     backwards_code = """
 while True:
-  <v> = len(s) - s.cursor
-  <t0>
-  if r or s.cursor == s.limit:
-    s.cursor = len(s) - <v>
-    break
-  s.cursor = len(s) - <v> - 1
+    <v> = len(s) - s.cursor
+    <t0>
+    if r or s.cursor == s.limit:
+        s.cursor = len(s) - <v>
+        break
+    s.cursor = len(s) - <v> - 1
 """
 
 class GoPastNode(_PseudoCodeNode):
     label = 'gopast'
     code = """
 while True:
-  <t0>
-  if r or s.cursor == s.limit:
-    break
-  s.cursor += 1
+    <t0>
+    if r or s.cursor == s.limit:
+        break
+    s.cursor += 1
 """
     backwards_code = """
 while True:
-  <t0>
-  if r or s.cursor == s.limit:
-    break
-  s.cursor -= 1
+    <t0>
+    if r or s.cursor == s.limit:
+        break
+    s.cursor -= 1
 """
 
 class RepeatNode(_PseudoCodeNode):
     label = 'repeat'
     code = """
 while True:
-  <v> = s.cursor
-  <t0>
-  if not r:
-    s.cursor = <v>
-    break
+    <v> = s.cursor
+    <t0>
+    if not r:
+        s.cursor = <v>
+        break
 r = True
 """
     backwards_code = """
 while True:
-  <v> = len(s) - s.cursor
-  <t0>
-  if not r:
-    s.cursor = len(s) - <v>
-    break
+    <v> = len(s) - s.cursor
+    <t0>
+    if not r:
+        s.cursor = len(s) - <v>
+        break
 r = True
 """
 
@@ -361,40 +361,40 @@ class LoopNode(_PseudoCodeNode):
     label = 'loop'
     code = """
 for <v> in xrange(<t0>):
-  <t1>
-  if not r:
-    break
+    <t1>
+    if not r:
+        break
 """
 
 class AtLeastNode(_PseudoCodeNode):
     label = 'atleast'
     code = """
 for <v> in xrange(<t0>):
-  <t1>
-  if not r:
-    break
-if r:
-  while True:
-    <v> = s.cursor
     <t1>
     if not r:
-      s.cursor = <v>
-      break
-  r = True
+        break
+if r:
+    while True:
+        <v> = s.cursor
+        <t1>
+        if not r:
+            s.cursor = <v>
+            break
+    r = True
 """
     backwards_code = """
 for <v> in xrange(<t0>):
-  <t1>
-  if not r:
-    break
-if r:
-  while True:
-    <v> = len(s) - s.cursor
     <t1>
     if not r:
-      s.cursor = len(s) - <v>
-      break
-  r = True
+        break
+if r:
+    while True:
+        <v> = len(s) - s.cursor
+        <t1>
+        if not r:
+            s.cursor = len(s) - <v>
+            break
+    r = True
 """
 
 class BackwardsNode(_PseudoCodeNode):
@@ -422,13 +422,13 @@ a_%d = None
 r = False
 <v4> = s.cursor
 for <v0>, <v1>, <v2> in _a_%d:
-  if s.starts_with(<v0>):
-    <v3> = s.cursor
-    r = (not <v1>) or getattr(self, <v1>)(s)
-    if r:
-      s.cursor = <v3>
-      a_%d = <v2>
-      break
+    if s.starts_with(<v0>):
+        <v3> = s.cursor
+        r = (not <v1>) or getattr(self, <v1>)(s)
+        if r:
+          s.cursor = <v3>
+          a_%d = <v2>
+          break
     s.cursor = <v4>
 """ % (index, index, index)
     return env.transform_pseudo_code(code, [])
@@ -441,7 +441,7 @@ def _make_if_chain(blocks):
     prefix = ''
     for block in blocks[1:]:
         code.append(prefix + 'if r:')
-        prefix += '  '
+        prefix += '    '
         code.append(sbl2py.utils.prefix_lines(block, prefix))
     return '\n'.join(code)
 
@@ -495,7 +495,7 @@ class AmongNode(Node):
                 command_code = command.generate_code(env)
             else:
                 command_code = 'r = True'
-            command_code = sbl2py.utils.prefix_lines(command_code, '  ')
+            command_code = sbl2py.utils.prefix_lines(command_code, '    ')
             code.append('if a_%d == %d:\n' % (self.among_index, index) +
                         command_code)
         return '\n'.join(code)
@@ -611,38 +611,38 @@ class GroupingNode(_PseudoCodeNode):
     label = 'grouping check'
     code = """
 if s.cursor == s.limit:
-  r = False
+    r = False
 else:
-  r = s.chars[s.cursor] in <t0>
+    r = s.chars[s.cursor] in <t0>
 if r:
-  s.cursor += 1
+    s.cursor += 1
 """
     backwards_code = """
 if s.cursor == s.limit:
-  r = False
+    r = False
 else:
-  r = s.chars[s.cursor - 1] in <t0>
+    r = s.chars[s.cursor - 1] in <t0>
 if r:
-  s.cursor -= 1
+    s.cursor -= 1
 """
 
 class NonNode(_PseudoCodeNode):
     label = 'negative grouping check'
     code = """
 if s.cursor == s.limit:
-  r = False
+    r = False
 else:
-  r = s.chars[s.cursor] not in <t0>
+    r = s.chars[s.cursor] not in <t0>
 if r:
-  s.cursor += 1
+    s.cursor += 1
 """
     backwards_code = """
 if s.cursor == s.limit:
-  r = False
+    r = False
 else:
-  r = s.chars[s.cursor - 1] not in <t0>
+    r = s.chars[s.cursor - 1] not in <t0>
 if r:
-  s.cursor -= 1
+    s.cursor -= 1
 """
 
 class DeleteNode(_PseudoCodeNode):
@@ -701,20 +701,20 @@ class SetLimitNode(_PseudoCodeNode):
 <v1> = len(s) - s.limit
 <t0>
 if r:
-  s.limit = s.cursor
-  s.cursor = <v0>
-  <t1>
-  s.limit = len(s) - <v1>
+    s.limit = s.cursor
+    s.cursor = <v0>
+    <t1>
+    s.limit = len(s) - <v1>
 """
     backwards_code = """
 <v0> = len(s) - s.cursor
 <v1> = s.limit
 <t0>
 if r:
-  s.limit = s.cursor
-  s.cursor = len(s) - <v0>
-  <t1>
-  s.limit = <v1>
+    s.limit = s.cursor
+    s.cursor = len(s) - <v0>
+    <t1>
+    s.limit = <v1>
 """
 
 class BackwardModeNode(Node):
@@ -731,10 +731,10 @@ class RoutineDefinitionNode(Node):
         self.name = name
 
     def generate_code(self, env):
-        code = ['def r_%s(self, s):' % self.name, '  r = True']
+        code = ['def r_%s(self, s):' % self.name, '    r = True']
         code.append(
-                sbl2py.utils.prefix_lines(self[0].generate_code(env), '  '))
-        code.append('  return r')
+                sbl2py.utils.prefix_lines(self[0].generate_code(env), '    '))
+        code.append('    return r')
         env.class_code.append('\n'.join(code))
         return ''
 
@@ -778,7 +778,7 @@ class _IfChainNode(Node):
         prefix = ''
         for t in range(1, len(self)):
             lines.append(prefix + 'if ' + self.not_str +'r:')
-            prefix += '  '
+            prefix += '    '
             if env.direction == 1:
                 lines.append(prefix + 's.cursor = <v>')
             else:
@@ -986,17 +986,17 @@ class BooleanDeclarationNode(_InitDeclarationNode):
 
 _FUNC_TEMPLATE = """
 def %s(s):
-  s = _String(s)
-  _Program().r_%s(s)
-  return unicode(s)
+    s = _String(s)
+    _Program().r_%s(s)
+    return unicode(s)
 """
 
 _DEBUG_FUNC_TEMPLATE = """
 def %s(s):
-  p = _Program()
-  s = _String(s)
-  p.r_%s(s)
-  return s, p
+    p = _Program()
+    s = _String(s)
+    p.r_%s(s)
+    return s, p
 """
 
 class ExternalDeclarationNode(Node):
@@ -1144,9 +1144,10 @@ class ProgramNode(Node):
         date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         version = sbl2py.__version__
         module_code = '\n'.join(env.module_code)
-        init_code = sbl2py.utils.prefix_lines('\n'.join(env.init_code), '    ')
+        init_code = sbl2py.utils.prefix_lines(
+                '\n'.join(env.init_code), '        ')
         class_code = sbl2py.utils.prefix_lines(
-                '\n\n'.join(env.class_code), '  ')
+                '\n\n'.join(env.class_code), '    ')
         return _MODULE_TEMPLATE % {
             'header':header,
             'date':date,
