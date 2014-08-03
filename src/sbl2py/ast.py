@@ -6,9 +6,11 @@ Abstract syntax tree (AST) and code generation for sbl2py.
 """
 
 import collections
+import datetime
 import re
 
-from sbl2py.utils import remove_empty_lines, extract_strings, prefix_lines, annotate
+import sbl2py
+import sbl2py.utils
 
 
 class Environment(object):
@@ -17,15 +19,19 @@ class Environment(object):
 
 	Encapsulates the options and state of a code generation session.
 	"""
-	def __init__(self, debug=False):
+	def __init__(self, header=None, debug=False):
 		"""
 		Constructor.
+
+		``header`` is an optional string that is inserted at the beginning of the
+		generated code. It is automatically prefixed with comment markers.
 
 		If ``debug`` is true then the public routines of the exported code return
 		a tuple consisting of the ``_String`` wrapper and the ``_Program`` instance
 		that was executed.
 		"""
 		self.debug = debug
+		self.header = header
 		self.direction = 1
 		self.module_code = []
 		self.class_code = []
@@ -51,16 +57,15 @@ class Environment(object):
 		- Words of the form ``<t\d+>`` are replaced with the corresponding item in
 			the ``tokens`` list. Indentation is preserved, even among multiple lines.
 		"""
-		code = remove_empty_lines(code)
-
-		tokens = extract_strings(tokens)
+		code = sbl2py.utils.remove_empty_lines(code)
+		tokens = sbl2py.utils.extract_strings(tokens)
 		for v in set(re.findall(r"<v\d*>", code)):
 			unique = "var%d" % self.var_index
 			self.var_index += 1
 			code = code.replace(v, unique)
 
 		def sub(match):
-			return prefix_lines(tokens[int(match.group(2))], match.group(1))
+			return sbl2py.utils.prefix_lines(tokens[int(match.group(2))], match.group(1))
 
 		return re.sub(r"( *)<t(\d+)>", sub, code)
 
@@ -153,7 +158,7 @@ class Node(collections.MutableSequence):
 			return '<%s/>' % self.__class__.__name__
 		result = ['<%s>' % self.__class__.__name__]
 		for child in self:
-			result.append(prefix_lines(child.to_xml(), ' '))
+			result.append(sbl2py.utils.prefix_lines(child.to_xml(), ' '))
 		result.append('</%s>' % self.__class__.__name__)
 		return '\n'.join(result)
 
@@ -170,7 +175,7 @@ class Node(collections.MutableSequence):
 		"""
 		if not self.label:
 			return s
-		return annotate(s, ' ' + self.label, prefix='  ', first='##', middle='#', last='##', single='#')
+		return sbl2py.utils.annotate(s, ' ' + self.label, prefix='  ', first='##', middle='#', last='##', single='#')
 
 class _PseudoCodeNode(Node):
 	"""
@@ -404,7 +409,7 @@ def _make_if_chain(blocks):
 	for block in blocks[1:]:
 		code.append(prefix + 'if r:')
 		prefix += '  '
-		code.append(prefix_lines(block, prefix))
+		code.append(sbl2py.utils.prefix_lines(block, prefix))
 	return '\n'.join(code)
 
 class SubstringNode(Node):
@@ -455,7 +460,7 @@ class AmongNode(Node):
 				command_code = command.generate_code(env)
 			else:
 				command_code = 'r = True'
-			command_code = prefix_lines(command_code, '  ')
+			command_code = sbl2py.utils.prefix_lines(command_code, '  ')
 			code.append('if a_%d == %d:\n' % (self.among_index, index) + command_code)
 		return '\n'.join(code)
 
@@ -473,7 +478,7 @@ class AmongNode(Node):
 	def to_xml(self):
 		cmds_xml = '\n'.join(cmd.to_xml() for cmd in self.commands if cmd)
 		if cmds_xml:
-			return "<AmongNode>\n%s\n</AmongNode>" % prefix_lines(cmds_xml, '  ')
+			return "<AmongNode>\n%s\n</AmongNode>" % sbl2py.utils.prefix_lines(cmds_xml, '  ')
 		else:
 			return "<AmongNode/>"
 
@@ -690,7 +695,7 @@ class RoutineDefinitionNode(Node):
 
 	def generate_code(self, env):
 		code = ['def r_%s(self, s):' % self.name, '  r = True']
-		code.append(prefix_lines(self[0].generate_code(env), '  '))
+		code.append(sbl2py.utils.prefix_lines(self[0].generate_code(env), '  '))
 		code.append('  return r')
 		env.class_code.append('\n'.join(code))
 		return ''
@@ -983,6 +988,11 @@ class GroupingDeclarationNode(_NoOpDeclarationNode):
 _MODULE_TEMPLATE = """#!/usr/bin/env python
 # vim:fileencoding=utf-8
 
+%(header)s
+
+# This file was auto-generated on %(date)s using
+# version %(version)s of the sbl2py Snowball-to-Python compiler.
+
 import sys
 
 class _String(object):
@@ -1089,10 +1099,19 @@ class ProgramNode(Node):
 	"""
 	def generate_code(self, env):
 		self.generate_children_codes(env)
+		if env.header:
+			header = sbl2py.utils.prefix_lines(env.header, '# ')
+		else:
+			header = ''
+		date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+		version = sbl2py.__version__
 		module_code = '\n'.join(env.module_code)
-		init_code = prefix_lines('\n'.join(env.init_code), '    ')
-		class_code = prefix_lines('\n\n'.join(env.class_code), '  ')
+		init_code = sbl2py.utils.prefix_lines('\n'.join(env.init_code), '    ')
+		class_code = sbl2py.utils.prefix_lines('\n\n'.join(env.class_code), '  ')
 		return _MODULE_TEMPLATE % {
+			'header':header,
+			'date':date,
+			'version':version,
 			'module_code':module_code,
 			'init_code':init_code,
 			'class_code':class_code,
