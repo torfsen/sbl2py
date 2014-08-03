@@ -877,13 +877,13 @@ def check_with_files(source_filename, input_filename, output_filename, routine='
 		inputs = f.read().splitlines()
 	with codecs.open(output_filename, 'r', 'utf8') as f:
 		expected = f.read().splitlines()
-	for inp, exp in zip(inputs, expected):
+	for lineno, (inp, exp) in enumerate(zip(inputs, expected), 1):
 		try:
 			outp = r(inp)
 		except Exception as e:
-			print "Could not transform %s: %s" % (repr(inp), e)
+			print "Could not transform %s (line %d): %s" % (repr(inp), lineno, e)
 			raise
-		assert outp == exp, 'Wrong output for "%s": Expected "%s", got "%s".' % (inp, exp, outp)
+		assert outp == exp, 'Wrong output for "%s" (line %d): Expected "%s", got "%s".' % (inp, lineno, exp, outp)
 
 
 @attr('slow')
