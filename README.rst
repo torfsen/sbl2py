@@ -1,5 +1,5 @@
 sbl2py - A Snowball-to-Python Compiler
-#######################################
+######################################
 *sbl2py* translates code written in the Snowball_ string processing
 language into Python_::
 
@@ -65,3 +65,12 @@ you can call the ``stem`` routine as follows::
 
     import mystemmer
     print mystemmer.stem('foobar')
+
+License
+=======
+*sbl2py* is covered by the `MIT License`_. The Snowball source code
+and the word lists in the ``test`` directory are covered by the
+`BSD-3 License`_. Please see the ``LICENSE`` file for details.
+
+.. _`MIT License`: http://opensource.org/licenses/MIT
+.. _`BSD-3 License`: http://opensource.org/licenses/BSD-3-Clause
