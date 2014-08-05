@@ -5,11 +5,10 @@ import sys
 from setuptools import setup, find_packages
 
 import sbl2py
-_version = sbl2py.__version__
 
 setup(
     name='sbl2py',
-    version=_version,
+    version=sbl2py.__version__,
     description='A Snowball-to-Python compiler',
     url='https://github.com/torfuspolymorphus/sbl2py',
     author='Florian Brucker',

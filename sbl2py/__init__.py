@@ -31,7 +31,7 @@ import sbl2py.ast
 import sbl2py.grammar
 
 
-__version__ = '0.1.0'
+__version__ = '0.1.0-1'
 
 
 def translate_file(infile, *args, **kwargs):
