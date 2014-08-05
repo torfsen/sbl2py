@@ -1,14 +1,28 @@
-import glob
+import codecs
 import os.path
+import re
 import sys
 
 from setuptools import setup, find_packages
 
-import sbl2py
+# We want the value of ``sbl2py.__version__``. However, we cannot
+# simply ``import sbl2py`` since sbl2py requires pyparsing which
+# might not be installed. Hence we extract the version information
+# "manually".
+module_dir = os.path.dirname(__file__)
+init_filename = os.path.join(module_dir, 'sbl2py', '__init__.py')
+with codecs.open(init_filename, 'r' ,'utf8') as f:
+    for line in f:
+        m = re.match(r'\s*__version__\s*=\s*[\'"](.*)[\'"]\s*', line)
+        if m:
+            version = m.group(1)
+            break
+    else:
+        raise Exception('Could not find version number.')
 
 setup(
     name='sbl2py',
-    version=sbl2py.__version__,
+    version=version,
     description='A Snowball-to-Python compiler',
     url='https://github.com/torfuspolymorphus/sbl2py',
     author='Florian Brucker',
