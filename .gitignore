@@ -1,2 +1,6 @@
+dist/
+env/
+sbl2py.egg-info/
+
 *.swp
 *.pyc
